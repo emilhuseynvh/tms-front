@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+:root {
+  --brand: 29 78 216; /* blue-600 */
+  --brand-2: 79 70 229; /* indigo-600 */
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* Smooth fonts for corporate look */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
