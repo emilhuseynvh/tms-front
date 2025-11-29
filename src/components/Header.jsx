@@ -39,8 +39,11 @@ const Header = ({ onMenuClick }) => {
         </svg>
       </button>
 
+      {/* Spacer for desktop */}
+      <div className="hidden md:block flex-1"></div>
+
       {/* Profile Dropdown */}
-      <div className="relative" ref={dropdownRef}>
+      <div className="relative ml-auto" ref={dropdownRef}>
         <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
@@ -88,7 +91,7 @@ const Header = ({ onMenuClick }) => {
 
         {/* Dropdown Menu */}
         {isDropdownOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 animate-slideDown">
             <button
               onClick={() => {
                 navigate('/profile')

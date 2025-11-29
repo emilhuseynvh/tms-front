@@ -16,8 +16,8 @@ import { useWebSocket, useWebSocketSend } from '../hooks/useWebSocket'
 // Avatar component
 const Avatar = ({ src, name, size = 'md' }) => {
   const sizeClasses = {
-    sm: 'w-10 h-10',
-    md: 'w-12 h-12',
+    sm: 'w-8 h-8 md:w-10 md:h-10',
+    md: 'w-10 h-10 md:w-12 md:h-12',
   }
 
   const baseClasses = `${sizeClasses[size]} rounded-full shrink-0`
@@ -282,12 +282,12 @@ const Chat = () => {
   }
 
   return (
-    <div className="flex h-full bg-white rounded-lg overflow-hidden">
+    <div className="flex flex-col md:flex-row h-full bg-white rounded-lg overflow-hidden">
       {/* Left Sidebar */}
       <div className={`w-full md:w-80 border-r border-gray-200 flex flex-col ${selectedRoom ? 'hidden md:flex' : 'flex'}`}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-3">
+        <div className="p-3 md:p-4 border-b border-gray-200 shrink-0">
+          <div className="flex items-center justify-between mb-2 md:mb-3">
             {view === 'users' ? (
               <>
                 <button
@@ -295,39 +295,39 @@ const Chat = () => {
                     setView('chats')
                     setSearchQuery('')
                   }}
-                  className="text-gray-600 hover:text-gray-900"
+                  className="text-gray-600 hover:text-gray-900 p-1 -ml-1"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <h2 className="text-xl font-semibold text-gray-800">İstifadəçilər</h2>
-                <div className="w-6"></div>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800">İstifadəçilər</h2>
+                <div className="w-5 md:w-6"></div>
               </>
             ) : (
               <>
-                <h2 className="text-xl font-semibold text-gray-800">Mesajlar</h2>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Mesajlar</h2>
               </>
             )}
           </div>
           {view === 'chats' && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-2 md:mb-0">
               <button
                 onClick={() => setView('users')}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                className="flex-1 px-2 md:px-3 py-1.5 md:py-2 bg-blue-600 text-white text-xs md:text-sm rounded-md hover:bg-blue-700 transition-colors"
               >
                 Yeni Chat
               </button>
               <button
                 onClick={() => setShowGroupModal(true)}
-                className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                className="flex-1 px-2 md:px-3 py-1.5 md:py-2 bg-green-600 text-white text-xs md:text-sm rounded-md hover:bg-green-700 transition-colors"
               >
                 Yeni Qrup
               </button>
             </div>
           )}
           {/* Search */}
-          <div className="mt-3">
+          <div className="mt-2 md:mt-3">
             <input
               type="text"
               placeholder={view === 'users' ? 'İstifadəçi axtar...' : 'Chat axtar...'}
@@ -351,14 +351,14 @@ const Chat = () => {
                 <div
                   key={user.id}
                   onClick={() => handleUserClick(user.id)}
-                  className="p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="p-3 md:p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3">
                     <Avatar src={getUserAvatar(user)} name={user.username} size="md" />
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 truncate">{user.username}</h3>
+                      <h3 className="font-medium text-sm md:text-base text-gray-900 truncate">{user.username}</h3>
                       {user.email && (
-                        <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                        <p className="text-xs md:text-sm text-gray-500 truncate">{user.email}</p>
                       )}
                     </div>
                   </div>
@@ -378,31 +378,31 @@ const Chat = () => {
                 <div
                   key={room.id}
                   onClick={() => setSelectedRoom(room)}
-                  className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+                  className={`p-3 md:p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors ${
                     selectedRoom?.id === room.id ? 'bg-blue-50' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3">
                     <Avatar src={getRoomAvatar(room)} name={getRoomName(room)} size="md" />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 md:gap-2 flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm md:text-base text-gray-900 truncate">
                             {getRoomName(room)}
                           </h3>
                           {room.unreadCount > 0 && (
-                            <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full shrink-0">
+                            <span className="bg-blue-600 text-white text-xs px-1.5 md:px-2 py-0.5 rounded-full shrink-0">
                               {room.unreadCount}
                             </span>
                           )}
                         </div>
                         {room.lastMessage && (
-                          <span className="text-xs text-gray-500 ml-2 shrink-0">
+                          <span className="text-xs text-gray-500 shrink-0">
                             {formatDate(room.lastMessage.createdAt)}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 truncate mt-1">
+                      <p className="text-xs md:text-sm text-gray-600 truncate mt-0.5 md:mt-1">
                         {getLastMessage(room)}
                       </p>
                     </div>
@@ -415,16 +415,16 @@ const Chat = () => {
       </div>
 
       {/* Messages Area */}
-      <div className={`flex-1 flex flex-col ${selectedRoom ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`flex-1 flex flex-col ${selectedRoom ? 'flex' : 'hidden md:flex'} min-w-0`}>
         {selectedRoom ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 bg-white">
-              <div className="flex items-center gap-3">
+            <div className="p-3 md:p-4 border-b border-gray-200 bg-white shrink-0">
+              <div className="flex items-center gap-2 md:gap-3">
                 {/* Back button for mobile */}
                 <button
                   onClick={() => setSelectedRoom(null)}
-                  className="md:hidden text-gray-600 hover:text-gray-900 mr-2"
+                  className="md:hidden text-gray-600 hover:text-gray-900 p-1 -ml-1"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -445,13 +445,13 @@ const Chat = () => {
             </div>
 
             {/* Messages */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-2 md:p-4 bg-gray-50 min-h-0">
               {messagesLoading ? (
-                <div className="text-center text-gray-500">Yüklənir...</div>
+                <div className="text-center text-gray-500 py-4">Yüklənir...</div>
               ) : messages.length === 0 ? (
-                <div className="text-center text-gray-500">Heç bir mesaj yoxdur</div>
+                <div className="text-center text-gray-500 py-4">Heç bir mesaj yoxdur</div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 md:space-y-4">
                   {messages.map((message) => {
                     const isOwnMessage = message.senderId === currentUser?.id
                     return (
@@ -460,7 +460,7 @@ const Chat = () => {
                         className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-md px-4 py-2 rounded-lg ${
+                          className={`max-w-[85%] md:max-w-md px-3 md:px-4 py-2 rounded-lg ${
                             isOwnMessage
                               ? 'bg-blue-600 text-white'
                               : 'bg-white text-gray-900 border border-gray-200'
@@ -505,16 +505,16 @@ const Chat = () => {
             </div>
 
             {/* Message Input */}
-            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-200 relative">
+            <form onSubmit={handleSendMessage} className="p-2 md:p-4 bg-white border-t border-gray-200 relative shrink-0">
               <div className="flex gap-2 items-end">
                 {/* Emoji Button */}
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                  className="p-2 md:p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors shrink-0"
                   title="Emoji"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
@@ -524,14 +524,17 @@ const Chat = () => {
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder="Mesaj yazın..."
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 md:px-4 py-2 text-sm md:text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
                   type="submit"
                   disabled={!messageInput.trim()}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 md:px-6 py-2 text-sm md:text-base bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shrink-0"
                 >
-                  Göndər
+                  <span className="hidden md:inline">Göndər</span>
+                  <svg className="w-5 h-5 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
                 </button>
               </div>
 
@@ -539,7 +542,7 @@ const Chat = () => {
               {showEmojiPicker && (
                 <div
                   ref={emojiPickerRef}
-                  className="absolute bottom-full left-0 mb-2 w-80 h-80 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden z-50"
+                  className="absolute bottom-full left-0 right-0 md:right-auto mb-2 w-full md:w-80 h-64 md:h-80 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden z-50"
                 >
                   <div className="h-full flex flex-col">
                     {/* Categories Tabs */}
@@ -561,12 +564,12 @@ const Chat = () => {
                           <h3 className="text-xs font-semibold text-gray-500 mb-1.5 sticky top-0 bg-white py-1 z-10">
                             {category}
                           </h3>
-                          <div className="grid grid-cols-8 gap-0.5">
+                          <div className="grid grid-cols-6 md:grid-cols-8 gap-0.5">
                             {emojis.map((emoji, index) => (
                               <button
                                 key={`${category}-${index}`}
                                 onClick={() => handleEmojiClick(emoji)}
-                                className="w-9 h-9 flex items-center justify-center text-lg hover:bg-gray-100 rounded transition-colors"
+                                className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center text-base md:text-lg hover:bg-gray-100 active:bg-gray-200 rounded transition-colors"
                                 title={emoji}
                               >
                                 {emoji}

@@ -53,6 +53,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     disconnectSocket()
     localStorage.removeItem('token')
     toast.success('Çıxış edildi!')
+    onClose() // Close sidebar before navigation
     navigate('/login')
   }
 
@@ -91,7 +92,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          className="fixed inset-0 bg-gray-500 bg-opacity-20 z-40 md:hidden"
           onClick={onClose}
         />
       )}
@@ -123,6 +124,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             <li key={item.path}>
               <NavLink
                 to={item.path}
+                onClick={onClose}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
                     isActive
@@ -205,7 +207,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                           }`}
                         >
                           <button
-                            onClick={() => navigate(`/tasks/folder/${folder.id}`)}
+                            onClick={() => {
+                              navigate(`/tasks/folder/${folder.id}`)
+                              onClose()
+                            }}
                             className="flex items-center gap-2 flex-1 min-w-0"
                           >
                             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
