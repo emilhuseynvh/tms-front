@@ -10,6 +10,7 @@ import Tasks from "../pages/Tasks";
 import TaskLists from "../pages/TaskLists";
 import TaskDetail from "../pages/TaskDetail";
 import Protected from "./Protected";
+import AdminProtected from "./AdminProtected";
 
 export const router = createBrowserRouter(
     createRoutesFromElements(
@@ -19,8 +20,8 @@ export const router = createBrowserRouter(
 
             {/* App routes with layout */}
             <Route path="/" element={<Protected><AppLayout /></Protected>}>
-                <Route path="/" element={<Navigate to="/users" replace />} />
-                <Route path="/users" element={<Users />} />
+                <Route path="/" element={<Navigate to="/projects" replace />} />
+                <Route path="/users" element={<AdminProtected><Users /></AdminProtected>} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/tasks/folder/:folderId" element={<TaskLists />} />
                 <Route path="/tasks/folder/:folderId/list/:taskListId" element={<TaskDetail />} />

@@ -2,6 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router'
 import { toast } from 'react-toastify'
 import { useState, useMemo, useEffect } from 'react'
 import { useGetFoldersQuery, useCreateFolderMutation, useUpdateFolderMutation, useDeleteFolderMutation } from '../services/adminApi'
+import { useVerifyQuery } from '../services/authApi'
 import Modal from './Modal'
 import { disconnectSocket } from '../hooks/useWebSocket'
 
@@ -14,10 +15,17 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [editingFolder, setEditingFolder] = useState(null)
   const [hoveredFolder, setHoveredFolder] = useState(null)
 
+  const { data: currentUser } = useVerifyQuery()
   const { data: folders = [] } = useGetFoldersQuery()
   const [createFolder, { isLoading: isCreating }] = useCreateFolderMutation()
   const [updateFolder, { isLoading: isUpdating }] = useUpdateFolderMutation()
   const [deleteFolder] = useDeleteFolderMutation()
+
+  // Get user role (handle both nested and direct role)
+  const userRole = useMemo(() => {
+    const role = currentUser?.role?.role || currentUser?.role || 'user'
+    return typeof role === 'string' ? role.toLowerCase() : 'user'
+  }, [currentUser])
 
   const filteredFolders = useMemo(() => {
     if (!searchQuery.trim()) return folders
@@ -57,7 +65,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     navigate('/login')
   }
 
-  const navItems = [
+  const allNavItems = [
     {
       path: '/users',
       label: 'İstifadəçilər',
@@ -66,6 +74,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
         </svg>
       ),
+      adminOnly: true, // Only show for admins
     },
     {
       path: '/chat',
@@ -86,6 +95,12 @@ const Sidebar = ({ isOpen, onClose }) => {
       ),
     },
   ]
+
+  // Filter nav items based on user role
+  const navItems = useMemo(() => {
+    const isAdmin = userRole === 'admin'
+    return allNavItems.filter(item => !item.adminOnly || isAdmin)
+  }, [userRole])
 
   return (
     <>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useLoginMutation } from '../services/authApi'
+import { useLoginMutation, authApi } from '../services/authApi'
+import { useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router'
 import { toast } from 'react-toastify'
 
@@ -7,6 +8,7 @@ const Login = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [login, { isLoading }] = useLoginMutation()
+  const dispatch = useDispatch()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -17,8 +19,16 @@ const Login = () => {
 
       if (result.token) {
         localStorage.setItem('token', result.token)
+        
+        // Invalidate verify query to get fresh user data
+        dispatch(authApi.util.invalidateTags(['User']))
+        
         toast.success('Uğurla daxil oldunuz!')
-        navigate('/users')
+        
+        // Small delay to ensure cache is invalidated before navigation
+        setTimeout(() => {
+          navigate('/projects')
+        }, 100)
       }
     } catch (error) {
       toast.error(error?.data?.message || 'Giriş uğursuz oldu!')

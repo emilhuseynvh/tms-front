@@ -1,27 +1,28 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { toast } from 'react-toastify'
+import { useUpdateTaskMutation } from '../services/adminApi'
 
 const TaskNotifications = ({ tasks }) => {
-  const notifiedTasksRef = useRef(new Set())
+  const [updateTask] = useUpdateTaskMutation()
 
   useEffect(() => {
     if (!tasks || tasks.length === 0) return
 
-    const checkDeadlines = () => {
+    const checkDeadlines = async () => {
       const now = new Date()
       const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000)
 
-      tasks.forEach((task) => {
+      for (const task of tasks) {
         // Skip if already done or no due date
-        if (task.status === 'done' || !task.dueAt) return
+        if (task.status === 'done' || !task.dueAt) continue
 
-        // Skip if already notified
-        if (notifiedTasksRef.current.has(task.id)) return
+        // Skip if already notified (is_message_send is true)
+        if (task.is_message_send === true) continue
 
         const dueDate = new Date(task.dueAt)
 
-        // Check if due date is within the next hour
-        if (dueDate > now && dueDate <= oneHourFromNow) {
+        // Check if due date is within the next hour AND is_message_send is false (or not set)
+        if (dueDate > now && dueDate <= oneHourFromNow && (task.is_message_send === false || task.is_message_send === undefined || task.is_message_send === null)) {
           const minutesLeft = Math.round((dueDate - now) / (1000 * 60))
 
           // Show notification with sound
@@ -45,10 +46,31 @@ const TaskNotifications = ({ tasks }) => {
           // Play notification sound
           playNotificationSound()
 
-          // Mark as notified
-          notifiedTasksRef.current.add(task.id)
+          // Update task to mark is_message_send as true
+          try {
+            const updatePayload = {
+              id: task.id,
+              title: task.title || '',
+              description: task.description || '',
+              startAt: task.startAt || null,
+              dueAt: task.dueAt,
+              taskListId: task.taskListId,
+              assigneeId: task.assigneeId || 0,
+              status: task.status || 'open',
+              is_message_send: true,
+            }
+            
+            // Include parentId only if it exists
+            if (task.parentId !== null && task.parentId !== undefined) {
+              updatePayload.parentId = task.parentId
+            }
+            
+            await updateTask(updatePayload).unwrap()
+          } catch (error) {
+            console.error('Failed to update task notification status:', error)
+          }
         }
-      })
+      }
     }
 
     // Check immediately
@@ -58,7 +80,7 @@ const TaskNotifications = ({ tasks }) => {
     const interval = setInterval(checkDeadlines, 5 * 60 * 1000)
 
     return () => clearInterval(interval)
-  }, [tasks])
+  }, [tasks, updateTask])
 
   // Request notification permission on mount
   useEffect(() => {

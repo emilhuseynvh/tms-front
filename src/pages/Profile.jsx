@@ -21,12 +21,15 @@ const Profile = () => {
 
   useEffect(() => {
     if (currentUser) {
+      // Handle both nested and direct role format
+      const userRole = currentUser.role?.role || currentUser.role || 'user'
+      
       setFormData({
         username: currentUser.username || '',
         phone: currentUser.phone || '',
         email: currentUser.email || '',
         password: '',
-        role: currentUser.role || 'user',
+        role: userRole,
         avatarId: currentUser.avatarId || 0,
       })
 
@@ -123,7 +126,7 @@ const Profile = () => {
               <p className="text-sm text-gray-500 mt-1 break-all">{currentUser?.email}</p>
               <div className="mt-2">
                 <span className="inline-flex px-2 py-1 text-xs font-medium rounded bg-blue-50 text-blue-700">
-                  {currentUser?.role || 'user'}
+                  {currentUser?.role?.role || currentUser?.role || 'user'}
                 </span>
               </div>
               {isUploading && (

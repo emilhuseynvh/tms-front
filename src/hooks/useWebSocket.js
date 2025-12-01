@@ -34,7 +34,7 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
       console.log('Initializing global socket connection with token...')
 
       // Connect to Socket.io server with /chat namespace
-      globalSocket = io('http://localhost:3000/chat', {
+      globalSocket = io('https://tms-back.apasni.me/chat', {
         auth: {
           token: token,
         },
