@@ -102,39 +102,64 @@ const Users = () => {
         <>
           {/* Desktop Table View */}
           <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto">
-            <table className="w-full">
+            <table className="min-w-full table-auto">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                     İstifadəçi adı
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                     Email
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                     Telefon
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                     Rol
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500">
-                    Əməliyyatlar
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{user.username}</span>
+                        <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenModal(user)
+                            }}
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Redaktə"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(user.id)
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Sil"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       {user.email}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       {user.phone}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-medium rounded ${
                           user.role === 'admin'
@@ -144,20 +169,6 @@ const Users = () => {
                       >
                         {user.role}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm">
-                      <button
-                        onClick={() => handleOpenModal(user)}
-                        className="text-blue-600 hover:text-blue-700 font-medium mr-4"
-                      >
-                        Redaktə
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="text-red-600 hover:text-red-700 font-medium"
-                      >
-                        Sil
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -247,24 +258,26 @@ const UserFormModal = ({
   })
 
   useEffect(() => {
-    if (user) {
-      setFormData({
-        username: user.username || '',
-        phone: user.phone || '',
-        email: user.email || '',
-        password: '',
-        role: user.role || 'user',
-      })
-    } else {
-      setFormData({
-        username: '',
-        phone: '',
-        email: '',
-        password: '',
-        role: 'user',
-      })
+    if (isOpen) {
+      if (user) {
+        setFormData({
+          username: user.username || '',
+          phone: user.phone || '',
+          email: user.email || '',
+          password: '',
+          role: user.role || 'user',
+        })
+      } else {
+        setFormData({
+          username: '',
+          phone: '',
+          email: '',
+          password: '',
+          role: 'user',
+        })
+      }
     }
-  }, [user])
+  }, [user, isOpen])
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })

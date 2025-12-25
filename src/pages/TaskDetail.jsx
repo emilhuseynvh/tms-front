@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import {
   useGetTasksByListQuery,
   useGetUsersQuery,
+  useGetTaskStatusesQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
   useDeleteTaskMutation,
@@ -13,13 +14,19 @@ import TaskNotifications from '../components/TaskNotifications'
 import { toast } from 'react-toastify'
 
 const TaskDetail = () => {
-  const { folderId, taskListId } = useParams()
+  const { spaceId, folderId, taskListId } = useParams()
   const navigate = useNavigate()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
   const [parentTaskId, setParentTaskId] = useState(null)
   const [draggedTask, setDraggedTask] = useState(null)
   const [expandedTasks, setExpandedTasks] = useState(new Set())
+  const [hoveredTaskId, setHoveredTaskId] = useState(null)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [isAddingTask, setIsAddingTask] = useState(false)
+  const [editingField, setEditingField] = useState(null) // {taskId, field}
+  const [editingValue, setEditingValue] = useState('')
+  const newTaskInputRef = useRef(null)
 
   // Filters
   const [search, setSearch] = useState('')
@@ -34,6 +41,7 @@ const TaskDetail = () => {
     endDate,
   })
   const { data: users = [] } = useGetUsersQuery()
+  const { data: statuses = [] } = useGetTaskStatusesQuery()
   const [createTask] = useCreateTaskMutation()
   const [updateTask] = useUpdateTaskMutation()
   const [deleteTask] = useDeleteTaskMutation()
@@ -68,22 +76,107 @@ const TaskDetail = () => {
     }
   }
 
-  const handleStatusChange = async (taskId, newStatus) => {
-    const task = tasks.find(t => t.id === taskId)
+  // Quick create task with just title
+  const handleQuickCreate = async (e, parentId = null) => {
+    e.preventDefault()
+    if (!newTaskTitle.trim()) return
+
+    try {
+      const payload = {
+        title: newTaskTitle.trim(),
+        taskListId: parseInt(taskListId),
+      }
+      if (parentId) {
+        payload.parentId = parentId
+      }
+      await createTask(payload).unwrap()
+      setNewTaskTitle('')
+      setIsAddingTask(false)
+      toast.success('Tapşırıq yaradıldı!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  // Inline edit handlers
+  const startEditing = (taskId, field, currentValue) => {
+    setEditingField({ taskId, field })
+    setEditingValue(currentValue || '')
+  }
+
+  const cancelEditing = () => {
+    setEditingField(null)
+    setEditingValue('')
+  }
+
+  const saveInlineEdit = async (taskId, field) => {
+    const task = findTaskById(tasks, taskId)
     if (!task) return
 
     try {
+      const payload = { id: taskId }
+
+      if (field === 'title') {
+        if (!editingValue.trim()) {
+          cancelEditing()
+          return
+        }
+        payload.title = editingValue.trim()
+      } else if (field === 'description') {
+        payload.description = editingValue
+      } else if (field === 'link') {
+        payload.link = editingValue
+      } else if (field === 'startAt') {
+        payload.startAt = editingValue ? new Date(editingValue).toISOString() : null
+      } else if (field === 'dueAt') {
+        payload.dueAt = editingValue ? new Date(editingValue).toISOString() : null
+      }
+
+      await updateTask(payload).unwrap()
+      cancelEditing()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleKeyDown = (e, taskId, field) => {
+    if (e.key === 'Enter' && field !== 'description') {
+      e.preventDefault()
+      saveInlineEdit(taskId, field)
+    } else if (e.key === 'Escape') {
+      cancelEditing()
+    }
+  }
+
+  // Find task by ID recursively
+  const findTaskById = (taskList, id) => {
+    for (const task of taskList) {
+      if (task.id === id) return task
+      if (task.children && task.children.length > 0) {
+        const found = findTaskById(task.children, id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  const handleStatusChange = async (taskId, statusId) => {
+    try {
       await updateTask({
         id: taskId,
-        title: task.title,
-        description: task.description,
-        startAt: task.startAt,
-        dueAt: task.dueAt,
-        taskListId: task.taskListId,
-        assigneeId: task.assigneeId,
-        status: newStatus,
+        statusId: statusId ? parseInt(statusId) : null,
       }).unwrap()
-      toast.success('Status yeniləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleAssigneesChange = async (taskId, assigneeIds) => {
+    try {
+      await updateTask({
+        id: taskId,
+        assigneeIds,
+      }).unwrap()
     } catch (error) {
       toast.error(error?.data?.message || 'Xəta baş verdi!')
     }
@@ -113,7 +206,6 @@ const TaskDetail = () => {
         taskId: draggedTask.task.id,
         targetIndex: targetIndex,
       }).unwrap()
-      toast.success('Sıralama yeniləndi!')
     } catch (error) {
       toast.error(error?.data?.message || 'Xəta baş verdi!')
     }
@@ -124,12 +216,22 @@ const TaskDetail = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-'
     const date = new Date(dateString)
-    return date.toLocaleDateString('az-AZ', { year: 'numeric', month: 'short', day: 'numeric' })
+    const day = date.getDate()
+    const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr']
+    const month = months[date.getMonth()]
+    const year = date.getFullYear()
+    return `${day} ${month} ${year}`
   }
 
-  const getUserName = (userId) => {
-    const user = users.find(u => u.id === userId)
-    return user?.username || '-'
+  const formatDateTimeLocal = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
   // Get root tasks (tasks with parentId === null)
@@ -151,12 +253,25 @@ const TaskDetail = () => {
     })
   }
 
+  // Focus on new task input when adding
+  useEffect(() => {
+    if (isAddingTask && newTaskInputRef.current) {
+      newTaskInputRef.current.focus()
+    }
+  }, [isAddingTask])
+
   // Recursive function to render task rows
   const renderTaskRow = (task, depth = 0, index = 0) => {
-    const indent = depth * 24
+    const indent = depth * 20
     const hasChildren = task.children && task.children.length > 0
     const isExpanded = expandedTasks.has(task.id)
-    
+    const isHovered = hoveredTaskId === task.id
+    const isEditingTitle = editingField?.taskId === task.id && editingField?.field === 'title'
+    const isEditingDesc = editingField?.taskId === task.id && editingField?.field === 'description'
+    const isEditingLink = editingField?.taskId === task.id && editingField?.field === 'link'
+    const isEditingStartAt = editingField?.taskId === task.id && editingField?.field === 'startAt'
+    const isEditingDueAt = editingField?.taskId === task.id && editingField?.field === 'dueAt'
+
     return (
       <>
         <tr
@@ -165,92 +280,200 @@ const TaskDetail = () => {
           onDragStart={(e) => handleDragStart(e, task, index)}
           onDragOver={handleDragOver}
           onDrop={(e) => handleDrop(e, index)}
-          className={`hover:bg-gray-50 transition-colors cursor-move ${
+          onMouseEnter={() => setHoveredTaskId(task.id)}
+          onMouseLeave={() => setHoveredTaskId(null)}
+          className={`hover:bg-gray-50 transition-colors cursor-move border-b border-gray-200 ${
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           }`}
         >
-          <td className="px-6 py-4">
-            <div className="flex items-center gap-2" style={{ paddingLeft: `${indent}px` }}>
+          <td className="px-2 py-2">
+            <div className="flex items-center gap-1" style={{ paddingLeft: `${indent}px` }}>
               {hasChildren ? (
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     toggleTask(task.id)
                   }}
-                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  className="p-0.5 hover:bg-gray-200 rounded transition-colors"
                   title={isExpanded ? 'Bağla' : 'Aç'}
                 >
-                  <svg 
-                    className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className={`w-3.5 h-3.5 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               ) : (
-                <div className="w-6" /> // Spacer for alignment
+                <div className="w-4" />
               )}
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
               </svg>
             </div>
           </td>
-          <td className="px-6 py-4">
-            <div>
-              <div className="text-sm font-medium text-gray-900">{task.title}</div>
-              {task.description && (
-                <div className="text-xs text-gray-500 mt-1 line-clamp-1">{task.description}</div>
-              )}
+          <td className="px-2 py-2 min-w-[200px]">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                {isEditingTitle ? (
+                  <input
+                    type="text"
+                    value={editingValue}
+                    onChange={(e) => setEditingValue(e.target.value)}
+                    onBlur={() => saveInlineEdit(task.id, 'title')}
+                    onKeyDown={(e) => handleKeyDown(e, task.id, 'title')}
+                    autoFocus
+                    className="w-full px-1.5 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                ) : (
+                  <div
+                    onClick={() => startEditing(task.id, 'title', task.title)}
+                    className="cursor-text hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5"
+                  >
+                    <div className="text-sm font-medium text-gray-900 truncate">{task.title}</div>
+                  </div>
+                )}
+              </div>
+              {/* Action buttons - Sub-task, Edit, Delete */}
+              <div className={`flex-shrink-0 flex items-center gap-1 transition-all ${
+                isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setParentTaskId(task.id)
+                    setIsAddingTask(true)
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded text-blue-600 bg-blue-50 hover:bg-blue-100"
+                  title="Sub-task əlavə et"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Sub-task</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleOpenModal(task)
+                  }}
+                  className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                  title="Redaktə et"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDelete(task.id)
+                  }}
+                  className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+                  title="Sil"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </td>
-          <td className="px-6 py-4">
+          <td className="px-2 py-2 whitespace-nowrap">
             <select
-              value={task.status}
+              value={task.statusId || ''}
               onChange={(e) => handleStatusChange(task.id, e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="text-xs border-0 rounded px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="text-xs border border-gray-200 rounded px-1.5 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 hover:border-gray-300"
+              style={task.status ? { backgroundColor: task.status.color + '20', color: task.status.color } : {}}
             >
-              <option value="open">Açıq</option>
-              <option value="in_progress">Davam edir</option>
-              <option value="done">Bitdi</option>
+              <option value="">Status</option>
+              {statuses.map(status => (
+                <option key={status.id} value={status.id}>{status.name}</option>
+              ))}
             </select>
           </td>
-          <td className="px-6 py-4 text-sm text-gray-600">
-            {getUserName(task.assigneeId)}
+          <td className="px-2 py-2">
+            <AssigneeSelector
+              task={task}
+              users={users}
+              onUpdate={handleAssigneesChange}
+            />
           </td>
-          <td className="px-6 py-4 text-sm text-gray-600">
-            {formatDate(task.startAt)}
+          <td className="px-2 py-2 whitespace-nowrap">
+            {isEditingStartAt ? (
+              <input
+                type="datetime-local"
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onBlur={() => saveInlineEdit(task.id, 'startAt')}
+                onKeyDown={(e) => handleKeyDown(e, task.id, 'startAt')}
+                autoFocus
+                className="text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            ) : (
+              <div
+                onClick={() => startEditing(task.id, 'startAt', formatDateTimeLocal(task.startAt))}
+                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded text-xs text-gray-600"
+              >
+                {formatDate(task.startAt)}
+              </div>
+            )}
           </td>
-          <td className="px-6 py-4 text-sm text-gray-600">
-            {formatDate(task.dueAt)}
+          <td className="px-2 py-2 whitespace-nowrap">
+            {isEditingDueAt ? (
+              <input
+                type="datetime-local"
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onBlur={() => saveInlineEdit(task.id, 'dueAt')}
+                onKeyDown={(e) => handleKeyDown(e, task.id, 'dueAt')}
+                autoFocus
+                className="text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            ) : (
+              <div
+                onClick={() => startEditing(task.id, 'dueAt', formatDateTimeLocal(task.dueAt))}
+                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded text-xs text-gray-600"
+              >
+                {formatDate(task.dueAt)}
+              </div>
+            )}
           </td>
-          <td className="px-6 py-4 text-right text-sm">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleOpenModal(null, task.id)
-                }}
-                className="text-green-600 hover:text-green-700 font-medium text-xs"
-                title="Sub-task əlavə et"
+          <td className="px-2 py-2">
+            {isEditingLink ? (
+              <input
+                type="url"
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onBlur={() => saveInlineEdit(task.id, 'link')}
+                onKeyDown={(e) => handleKeyDown(e, task.id, 'link')}
+                autoFocus
+                placeholder="https://..."
+                className="w-full text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            ) : (
+              <div
+                onClick={() => startEditing(task.id, 'link', task.link)}
+                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded"
               >
-                + Sub-task
-              </button>
-              <button
-                onClick={() => handleOpenModal(task)}
-                className="text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Redaktə
-              </button>
-              <button
-                onClick={() => handleDelete(task.id)}
-                className="text-red-600 hover:text-red-700 font-medium"
-              >
-                Sil
-              </button>
-            </div>
+                {task.link ? (
+                  <a
+                    href={task.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-xs text-blue-600 hover:underline truncate block max-w-[120px]"
+                  >
+                    {task.link}
+                  </a>
+                ) : (
+                  <span className="text-xs text-gray-300">-</span>
+                )}
+              </div>
+            )}
           </td>
         </tr>
         {hasChildren && isExpanded && task.children.map((child, idx) => renderTaskRow(child, depth + 1, idx))}
@@ -258,12 +481,12 @@ const TaskDetail = () => {
     )
   }
 
-  // Recursive function to render task cards
+  // Recursive function to render task cards (mobile)
   const renderTaskCard = (task, depth = 0, index = 0) => {
     const indent = depth * 16
     const hasChildren = task.children && task.children.length > 0
     const isExpanded = expandedTasks.has(task.id)
-    
+
     return (
       <div key={task.id}>
         <div
@@ -276,7 +499,7 @@ const TaskDetail = () => {
           }`}
           style={{ marginLeft: `${indent}px` }}
         >
-          <div className="flex items-start gap-3 mb-3">
+          <div className="flex items-start gap-3">
             <div className="pt-1 flex items-center gap-1">
               {hasChildren ? (
                 <button
@@ -285,46 +508,48 @@ const TaskDetail = () => {
                     toggleTask(task.id)
                   }}
                   className="p-0.5 hover:bg-gray-200 rounded transition-colors"
-                  title={isExpanded ? 'Bağla' : 'Aç'}
                 >
-                  <svg 
-                    className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
+                  <svg
+                    className={`w-4 h-4 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               ) : (
-                <div className="w-5" /> // Spacer for alignment
+                <div className="w-5" />
               )}
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-              </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-medium text-gray-900 mb-1">{task.title}</h3>
+              <h3
+                className="text-sm font-medium text-gray-900 mb-1 cursor-pointer hover:text-blue-600"
+                onClick={() => handleOpenModal(task)}
+              >
+                {task.title}
+              </h3>
               {task.description && (
                 <p className="text-xs text-gray-500 line-clamp-2 mb-3">{task.description}</p>
               )}
 
               <div className="space-y-2 mb-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Status:</span>
-                  <select
-                    value={task.status}
-                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                    className="text-xs border border-gray-300 rounded px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="open">Açıq</option>
-                    <option value="in_progress">Davam edir</option>
-                    <option value="done">Bitdi</option>
-                  </select>
-                </div>
-                <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-500">Təyin edilib:</span>
-                  <span className="text-gray-900 font-medium">{getUserName(task.assigneeId)}</span>
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {task.assignees && task.assignees.length > 0 ? (
+                      task.assignees.map((assignee) => (
+                        <span
+                          key={assignee.id}
+                          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700"
+                        >
+                          {assignee.username}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-500">Başlama:</span>
@@ -334,27 +559,40 @@ const TaskDetail = () => {
                   <span className="text-gray-500">Bitmə:</span>
                   <span className="text-gray-900">{formatDate(task.dueAt)}</span>
                 </div>
+                {task.link && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Link:</span>
+                    <a
+                      href={task.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline truncate max-w-[150px]"
+                    >
+                      {task.link}
+                    </a>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 pt-3 border-t border-gray-100">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleOpenModal(null, task.id)
+                  onClick={() => {
+                    setParentTaskId(task.id)
+                    setIsAddingTask(true)
                   }}
-                  className="px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
                 >
                   + Sub-task
                 </button>
                 <button
                   onClick={() => handleOpenModal(task)}
-                  className="flex-1 px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                  className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded transition-colors"
                 >
                   Redaktə
                 </button>
                 <button
                   onClick={() => handleDelete(task.id)}
-                  className="flex-1 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
+                  className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded transition-colors"
                 >
                   Sil
                 </button>
@@ -375,7 +613,13 @@ const TaskDetail = () => {
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
           <button
-            onClick={() => navigate(`/tasks/folder/${folderId}`)}
+            onClick={() => {
+              if (folderId) {
+                navigate(`/tasks/space/${spaceId}/folder/${folderId}`)
+              } else {
+                navigate(`/tasks/space/${spaceId}`)
+              }
+            }}
             className="p-2 hover:bg-gray-100 rounded-md transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,16 +629,6 @@ const TaskDetail = () => {
           <div className="flex-1 min-w-0">
             <h1 className="text-xl md:text-2xl font-semibold text-gray-900">Tapşırıqlar</h1>
           </div>
-          <button
-            onClick={() => handleOpenModal()}
-            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">Yeni Tapşırıq</span>
-            <span className="sm:hidden">Yeni</span>
-          </button>
         </div>
 
         {/* Filters Section */}
@@ -484,50 +718,151 @@ const TaskDetail = () => {
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
-      ) : tasks.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Tapşırıq yoxdur</h3>
-          <p className="text-gray-500 mb-4">İlk tapşırığınızı yaradın</p>
-          <button
-            onClick={() => handleOpenModal()}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Tapşırıq Yarat
-          </button>
-        </div>
       ) : (
         <>
           {/* Desktop Table View */}
-          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full">
+          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto overflow-y-visible">
+            <table className="w-full" style={{ minWidth: '900px' }}>
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 w-10"></th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Başlıq</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Təyin edilib</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Başlama</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Bitmə</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500">Əməliyyatlar</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-8"></th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Başlıq</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Status</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Təyin edilib</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Başlama</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Bitmə</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Link</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {rootTasks.map((task, index) => renderTaskRow(task, 0, index))}
               </tbody>
             </table>
+
+            {/* Add Task Row */}
+            <div className="border-t border-gray-200 px-4 py-3">
+              {isAddingTask ? (
+                <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="flex items-center gap-2">
+                  <input
+                    ref={newTaskInputRef}
+                    type="text"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    placeholder={parentTaskId ? "Sub-task adı..." : "Tapşırıq adı..."}
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setIsAddingTask(false)
+                        setNewTaskTitle('')
+                        setParentTaskId(null)
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newTaskTitle.trim()}
+                    className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Əlavə et
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingTask(false)
+                      setNewTaskTitle('')
+                      setParentTaskId(null)
+                    }}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    Ləğv et
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setIsAddingTask(true)}
+                  className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Tapşırıq əlavə et</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Mobile Card View */}
-          <div className="md:hidden space-y-3">
-            {rootTasks.map((task, index) => renderTaskCard(task, 0, index))}
+          <div className="md:hidden">
+            <div className="space-y-3">
+              {rootTasks.map((task, index) => renderTaskCard(task, 0, index))}
+            </div>
+
+            {/* Add Task Button for Mobile */}
+            <div className="mt-4">
+              {isAddingTask ? (
+                <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="bg-white rounded-lg border border-gray-200 p-4">
+                  <input
+                    ref={newTaskInputRef}
+                    type="text"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    placeholder={parentTaskId ? "Sub-task adı..." : "Tapşırıq adı..."}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={!newTaskTitle.trim()}
+                      className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Əlavə et
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingTask(false)
+                        setNewTaskTitle('')
+                        setParentTaskId(null)
+                      }}
+                      className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    >
+                      Ləğv et
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setIsAddingTask(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-gray-500 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:text-blue-600 hover:border-blue-300 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Tapşırıq əlavə et</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {tasks.length === 0 && !isAddingTask && (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center mt-4">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Tapşırıq yoxdur</h3>
+              <p className="text-gray-500 mb-4">İlk tapşırığınızı yaradın</p>
+              <button
+                onClick={() => setIsAddingTask(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Tapşırıq Yarat
+              </button>
+            </div>
+          )}
         </>
       )}
 
-      {/* Task Form Modal */}
+      {/* Task Form Modal - for detailed editing */}
       <TaskFormModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
@@ -541,6 +876,93 @@ const TaskDetail = () => {
       />
       </div>
     </>
+  )
+}
+
+// Assignee Selector Component
+const AssigneeSelector = ({ task, users, onUpdate }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
+  const ref = useRef(null)
+  const triggerRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleOpen = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX
+      })
+    }
+    setIsOpen(!isOpen)
+  }
+
+  const toggleAssignee = (userId) => {
+    const currentIds = task.assignees?.map(a => a.id) || []
+    let newIds
+    if (currentIds.includes(userId)) {
+      newIds = currentIds.filter(id => id !== userId)
+    } else {
+      newIds = [...currentIds, userId]
+    }
+    onUpdate(task.id, newIds)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <div
+        ref={triggerRef}
+        onClick={handleOpen}
+        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded -mx-2"
+      >
+        <div className="flex flex-wrap gap-1">
+          {task.assignees && task.assignees.length > 0 ? (
+            task.assignees.map((assignee) => (
+              <span
+                key={assignee.id}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700"
+              >
+                {assignee.username}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-gray-300 italic">Təyin et...</span>
+          )}
+        </div>
+      </div>
+
+      {isOpen && (
+        <div
+          className="fixed z-[9999] w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 max-h-48 overflow-y-auto"
+          style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+        >
+          {users.map(user => (
+            <label
+              key={user.id}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={task.assignees?.some(a => a.id === user.id) || false}
+                onChange={() => toggleAssignee(user.id)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">{user.username}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -561,14 +983,13 @@ const TaskFormModal = ({
     startAt: '',
     dueAt: '',
     taskListId: 0,
-    assigneeId: 0,
-    status: 'open',
+    assigneeIds: [],
     parentId: 0,
+    link: '',
   })
 
   const [isLoading, setIsLoading] = useState(false)
 
-  // Helper function to convert date to datetime-local format
   const formatDateTimeLocal = (dateString) => {
     if (!dateString) return ''
     const date = new Date(dateString)
@@ -588,9 +1009,9 @@ const TaskFormModal = ({
         startAt: formatDateTimeLocal(task.startAt),
         dueAt: formatDateTimeLocal(task.dueAt),
         taskListId: task.taskListId || parseInt(taskListId),
-        assigneeId: task.assigneeId || 0,
-        status: task.status || 'open',
+        assigneeIds: task.assignees?.map(a => a.id) || [],
         parentId: task.parentId || 0,
+        link: task.link || '',
       })
     } else {
       setFormData({
@@ -599,9 +1020,9 @@ const TaskFormModal = ({
         startAt: '',
         dueAt: '',
         taskListId: parseInt(taskListId),
-        assigneeId: 0,
-        status: 'open',
+        assigneeIds: [],
         parentId: parentTaskId || 0,
+        link: '',
       })
     }
   }, [task, taskListId, parentTaskId])
@@ -610,15 +1031,24 @@ const TaskFormModal = ({
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  const handleAssigneeToggle = (userId) => {
+    setFormData(prev => {
+      const currentIds = prev.assigneeIds || []
+      if (currentIds.includes(userId)) {
+        return { ...prev, assigneeIds: currentIds.filter(id => id !== userId) }
+      } else {
+        return { ...prev, assigneeIds: [...currentIds, userId] }
+      }
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      // Prepare payload - exclude parentId if it's 0 or not set
       const payload = { ...formData }
-      
-      // Convert parentId to number, exclude if 0
+
       if (payload.parentId) {
         payload.parentId = parseInt(payload.parentId)
         if (payload.parentId === 0) {
@@ -627,18 +1057,9 @@ const TaskFormModal = ({
       } else {
         delete payload.parentId
       }
-      
-      // Convert assigneeId to number, use 0 if not set
-      if (payload.assigneeId) {
-        payload.assigneeId = parseInt(payload.assigneeId)
-      } else {
-        payload.assigneeId = 0
-      }
-      
-      // Convert taskListId to number
+
       payload.taskListId = parseInt(payload.taskListId)
-      
-      // Convert dates to ISO string format
+
       if (payload.startAt) {
         payload.startAt = new Date(payload.startAt).toISOString()
       }
@@ -697,6 +1118,20 @@ const TaskFormModal = ({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Link
+          </label>
+          <input
+            type="url"
+            name="link"
+            value={formData.link}
+            onChange={handleChange}
+            placeholder="https://..."
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -727,37 +1162,42 @@ const TaskFormModal = ({
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Təyin et
+            Təyin et (bir neçə seçə bilərsiniz)
           </label>
-          <select
-            name="assigneeId"
-            value={formData.assigneeId}
-            onChange={handleChange}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value={0}>Təyin edilməyib</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.username}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Status
-          </label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="open">Açıq</option>
-            <option value="in_progress">Davam edir</option>
-            <option value="done">Bitdi</option>
-          </select>
+          <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+            {users.length === 0 ? (
+              <p className="text-sm text-gray-500 py-2 text-center">İstifadəçi yoxdur</p>
+            ) : (
+              <div className="space-y-1">
+                {users.map((user) => (
+                  <label
+                    key={user.id}
+                    className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                      formData.assigneeIds?.includes(user.id)
+                        ? 'bg-blue-50 border border-blue-200'
+                        : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.assigneeIds?.includes(user.id)}
+                      onChange={() => handleAssigneeToggle(user.id)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">{user.username}</span>
+                    {user.email && (
+                      <span className="text-xs text-gray-400 ml-auto">{user.email}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {formData.assigneeIds?.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.assigneeIds.length} istifadəçi seçildi
+            </p>
+          )}
         </div>
 
         {parentTaskId && !task && (
@@ -770,28 +1210,6 @@ const TaskFormModal = ({
                 Bu tapşırıq <strong>{tasks.find(t => t.id === parentTaskId)?.title || 'seçilmiş task'}</strong> üçün sub-task kimi yaradılacaq
               </span>
             </div>
-          </div>
-        )}
-        {!parentTaskId && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ana Tapşırıq (Parent)
-            </label>
-            <select
-              name="parentId"
-              value={formData.parentId}
-              onChange={handleChange}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value={0}>Ana tapşırıq yoxdur</option>
-              {tasks
-                .filter((t) => !task || t.id !== task.id) // Exclude current task if editing
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                  </option>
-                ))}
-            </select>
           </div>
         )}
 

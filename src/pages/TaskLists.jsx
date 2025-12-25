@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import {
   useGetTaskListsByFolderQuery,
-  useGetFoldersQuery,
+  useGetTaskListsBySpaceQuery,
+  useGetFoldersBySpaceQuery,
+  useGetSpaceQuery,
   useCreateTaskListMutation,
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
@@ -11,7 +13,7 @@ import Modal from '../components/Modal'
 import { toast } from 'react-toastify'
 
 const TaskLists = () => {
-  const { folderId } = useParams()
+  const { spaceId, folderId } = useParams()
   const navigate = useNavigate()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTaskList, setEditingTaskList] = useState(null)
@@ -22,18 +24,50 @@ const TaskLists = () => {
   const [endDate, setEndDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
-  const { data: folders = [] } = useGetFoldersQuery()
-  const { data: taskLists = [], isLoading } = useGetTaskListsByFolderQuery({
-    folderId,
-    search,
-    startDate,
-    endDate,
-  })
+  // Space and folder data
+  const { data: space } = useGetSpaceQuery(spaceId, { skip: !spaceId })
+  const { data: folders = [] } = useGetFoldersBySpaceQuery(spaceId, { skip: !spaceId })
+
+  // Task lists based on context
+  const { data: folderTaskLists = [], isLoading: isFolderLoading } = useGetTaskListsByFolderQuery(
+    { folderId, search, startDate, endDate },
+    { skip: !folderId }
+  )
+  const { data: spaceDirectLists = [], isLoading: isSpaceLoading } = useGetTaskListsBySpaceQuery(
+    spaceId,
+    { skip: !spaceId || !!folderId }
+  )
+
+  const taskLists = folderId ? folderTaskLists : spaceDirectLists
+  const isLoading = folderId ? isFolderLoading : isSpaceLoading
+
   const [createTaskList, { isLoading: isCreating }] = useCreateTaskListMutation()
   const [updateTaskList, { isLoading: isUpdating }] = useUpdateTaskListMutation()
   const [deleteTaskList] = useDeleteTaskListMutation()
 
-  const currentFolder = folders.find((f) => f.id === parseInt(folderId))
+  const currentFolder = useMemo(() => {
+    return folders.find((f) => f.id === parseInt(folderId))
+  }, [folders, folderId])
+
+  const pageTitle = useMemo(() => {
+    if (folderId && currentFolder) {
+      return currentFolder.name
+    }
+    if (space) {
+      return space.name
+    }
+    return 'Tapşırıqlar'
+  }, [folderId, currentFolder, space])
+
+  const pageDescription = useMemo(() => {
+    if (folderId && currentFolder) {
+      return currentFolder.description
+    }
+    if (space) {
+      return space.description
+    }
+    return null
+  }, [folderId, currentFolder, space])
 
   const handleClearFilters = () => {
     setSearch('')
@@ -68,7 +102,13 @@ const TaskLists = () => {
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
           <button
-            onClick={() => navigate('/tasks')}
+            onClick={() => {
+              if (folderId && spaceId) {
+                navigate(`/tasks/space/${spaceId}`)
+              } else {
+                navigate('/tasks')
+              }
+            }}
             className="p-2 hover:bg-gray-100 rounded-md transition-colors"
           >
             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,10 +117,10 @@ const TaskLists = () => {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">
-              {currentFolder?.name || 'Qovluq'}
+              {pageTitle}
             </h1>
-            {currentFolder?.description && (
-              <p className="text-sm text-gray-500 mt-1 line-clamp-2">{currentFolder.description}</p>
+            {pageDescription && (
+              <p className="text-sm text-gray-500 mt-1 line-clamp-2">{pageDescription}</p>
             )}
           </div>
           <button
@@ -201,7 +241,13 @@ const TaskLists = () => {
           {taskLists.map((taskList) => (
             <div
               key={taskList.id}
-              onClick={() => navigate(`/tasks/folder/${folderId}/list/${taskList.id}`)}
+              onClick={() => {
+                if (folderId) {
+                  navigate(`/tasks/space/${spaceId}/folder/${folderId}/list/${taskList.id}`)
+                } else {
+                  navigate(`/tasks/space/${spaceId}/list/${taskList.id}`)
+                }
+              }}
               className="bg-white rounded-lg border border-gray-200 p-5 hover:border-green-300 hover:shadow-md transition-all cursor-pointer group"
             >
               <div className="flex items-start justify-between mb-3">
@@ -252,6 +298,7 @@ const TaskLists = () => {
         onClose={handleCloseModal}
         taskList={editingTaskList}
         folderId={folderId}
+        spaceId={spaceId}
         createTaskList={createTaskList}
         updateTaskList={updateTaskList}
         isCreating={isCreating}
@@ -266,6 +313,7 @@ const TaskListFormModal = ({
   onClose,
   taskList,
   folderId,
+  spaceId,
   createTaskList,
   updateTaskList,
   isCreating,
@@ -273,22 +321,19 @@ const TaskListFormModal = ({
 }) => {
   const [formData, setFormData] = useState({
     name: '',
-    folderId: 0,
   })
 
   useEffect(() => {
     if (taskList) {
       setFormData({
         name: taskList.name || '',
-        folderId: taskList.folderId || parseInt(folderId),
       })
     } else {
       setFormData({
         name: '',
-        folderId: parseInt(folderId),
       })
     }
-  }, [taskList, folderId])
+  }, [taskList])
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -304,7 +349,13 @@ const TaskListFormModal = ({
         toast.success('Tapşırıq siyahısı yeniləndi!')
       } else {
         // Create
-        await createTaskList(formData).unwrap()
+        const payload = { name: formData.name }
+        if (folderId) {
+          payload.folderId = parseInt(folderId)
+        } else if (spaceId) {
+          payload.spaceId = parseInt(spaceId)
+        }
+        await createTaskList(payload).unwrap()
         toast.success('Tapşırıq siyahısı yaradıldı!')
       }
       onClose()

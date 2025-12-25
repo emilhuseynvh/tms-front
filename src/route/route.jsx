@@ -9,6 +9,9 @@ import Users from "../pages/Users";
 import Tasks from "../pages/Tasks";
 import TaskLists from "../pages/TaskLists";
 import TaskDetail from "../pages/TaskDetail";
+import TaskStatuses from "../pages/TaskStatuses";
+import ActivityLogs from "../pages/ActivityLogs";
+import Trash from "../pages/Trash";
 import Protected from "./Protected";
 import AdminProtected from "./AdminProtected";
 
@@ -22,7 +25,16 @@ export const router = createBrowserRouter(
             <Route path="/" element={<Protected><AppLayout /></Protected>}>
                 <Route path="/" element={<Navigate to="/projects" replace />} />
                 <Route path="/users" element={<AdminProtected><Users /></AdminProtected>} />
+                <Route path="/statuses" element={<AdminProtected><TaskStatuses /></AdminProtected>} />
+                <Route path="/activity-logs" element={<ActivityLogs />} />
+                <Route path="/trash" element={<Trash />} />
                 <Route path="/tasks" element={<Tasks />} />
+                {/* Space routes */}
+                <Route path="/tasks/space/:spaceId" element={<TaskLists />} />
+                <Route path="/tasks/space/:spaceId/folder/:folderId" element={<TaskLists />} />
+                <Route path="/tasks/space/:spaceId/list/:taskListId" element={<TaskDetail />} />
+                <Route path="/tasks/space/:spaceId/folder/:folderId/list/:taskListId" element={<TaskDetail />} />
+                {/* Legacy folder routes - for backwards compatibility */}
                 <Route path="/tasks/folder/:folderId" element={<TaskLists />} />
                 <Route path="/tasks/folder/:folderId/list/:taskListId" element={<TaskDetail />} />
                 <Route path="/projects" element={<Projects />} />
