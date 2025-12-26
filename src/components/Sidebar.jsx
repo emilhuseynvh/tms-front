@@ -12,7 +12,9 @@ import {
   useDeleteFolderMutation,
   useGetTaskListsByFolderQuery,
   useGetTaskListsBySpaceQuery,
-  useCreateTaskListMutation
+  useCreateTaskListMutation,
+  useUpdateTaskListMutation,
+  useDeleteTaskListMutation
 } from '../services/adminApi'
 import { useVerifyQuery } from '../services/authApi'
 import Modal from './Modal'
@@ -338,12 +340,16 @@ const SpaceItem = ({
   const [updateFolder, { isLoading: isUpdatingFolder }] = useUpdateFolderMutation()
   const [deleteFolder] = useDeleteFolderMutation()
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
+  const [updateTaskList, { isLoading: isUpdatingList }] = useUpdateTaskListMutation()
+  const [deleteTaskList] = useDeleteTaskListMutation()
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState(null)
   const [isDirectListModalOpen, setIsDirectListModalOpen] = useState(false)
+  const [editingList, setEditingList] = useState(null)
   const [expandedFolders, setExpandedFolders] = useState({})
   const [hoveredFolder, setHoveredFolder] = useState(null)
+  const [hoveredList, setHoveredList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
 
   const isActive = location.pathname.startsWith(`/tasks/space/${space.id}`)
@@ -374,6 +380,28 @@ const SpaceItem = ({
       try {
         await deleteFolder(id).unwrap()
         toast.success('Qovluq silindi!')
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+      }
+    }
+  }
+
+  const handleOpenListModal = (list = null) => {
+    setEditingList(list)
+    setIsDirectListModalOpen(true)
+  }
+
+  const handleCloseListModal = () => {
+    setEditingList(null)
+    setIsDirectListModalOpen(false)
+  }
+
+  const handleDeleteList = async (e, id) => {
+    e.stopPropagation()
+    if (window.confirm('Bu siyahını silmək istədiyinizdən əminsiniz?')) {
+      try {
+        await deleteTaskList(id).unwrap()
+        toast.success('Siyahı silindi!')
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }
@@ -484,20 +512,54 @@ const SpaceItem = ({
 
               {/* Birbaşa Space-ə bağlı list-lər */}
               {directLists.map((list) => (
-                <li key={list.id}>
-                  <button
-                    onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
-                    className={`w-full text-left px-2 py-2 rounded text-sm transition-colors flex items-center gap-2 ${
+                <li
+                  key={list.id}
+                  onMouseEnter={() => setHoveredList(list.id)}
+                  onMouseLeave={() => setHoveredList(null)}
+                  className="group"
+                >
+                  <div
+                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors ${
                       location.pathname.includes(`/list/${list.id}`)
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                     }`}
                   >
-                    <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span className="truncate">{list.name}</span>
-                  </button>
+                    <button
+                      onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
+                      className="flex items-center gap-2 flex-1 min-w-0"
+                    >
+                      <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      <span className="truncate">{list.name}</span>
+                    </button>
+                    {hoveredList === list.id && (
+                      <div className="flex gap-0.5 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenListModal(list)
+                          }}
+                          className="p-1 hover:bg-blue-200 rounded transition-colors"
+                          title="Redaktə et"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteList(e, list.id)}
+                          className="p-1 hover:bg-red-100 hover:text-red-600 rounded transition-colors"
+                          title="Sil"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </li>
               ))}
 
@@ -558,10 +620,13 @@ const SpaceItem = ({
       {/* Direct List Form Modal */}
       <TaskListFormModal
         isOpen={isDirectListModalOpen}
-        onClose={() => setIsDirectListModalOpen(false)}
+        onClose={handleCloseListModal}
         spaceId={space.id}
+        list={editingList}
         createTaskList={createTaskList}
+        updateTaskList={updateTaskList}
         isCreating={isCreatingList}
+        isUpdating={isUpdatingList}
         onListCreated={(listId) => onNavigate(`/tasks/space/${space.id}/list/${listId}`)}
       />
     </li>
@@ -585,9 +650,36 @@ const FolderItem = ({
     { skip: !isExpanded }
   )
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
+  const [updateTaskList, { isLoading: isUpdatingList }] = useUpdateTaskListMutation()
+  const [deleteTaskList] = useDeleteTaskListMutation()
+
   const [isListModalOpen, setIsListModalOpen] = useState(false)
+  const [editingList, setEditingList] = useState(null)
+  const [hoveredList, setHoveredList] = useState(null)
 
   const isActive = location.pathname.includes(`/folder/${folder.id}`)
+
+  const handleOpenListModal = (list = null) => {
+    setEditingList(list)
+    setIsListModalOpen(true)
+  }
+
+  const handleCloseListModal = () => {
+    setEditingList(null)
+    setIsListModalOpen(false)
+  }
+
+  const handleDeleteList = async (e, id) => {
+    e.stopPropagation()
+    if (window.confirm('Bu siyahını silmək istədiyinizdən əminsiniz?')) {
+      try {
+        await deleteTaskList(id).unwrap()
+        toast.success('Siyahı silindi!')
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+      }
+    }
+  }
 
   return (
     <li
@@ -684,25 +776,58 @@ const FolderItem = ({
           ) : (
             <>
               {taskLists.map((list) => (
-                <li key={list.id}>
-                  <button
-                    onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
-                    className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors flex items-center gap-2 ${
+                <li
+                  key={list.id}
+                  onMouseEnter={() => setHoveredList(list.id)}
+                  onMouseLeave={() => setHoveredList(null)}
+                >
+                  <div
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors ${
                       location.pathname.includes(`/list/${list.id}`)
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                     }`}
                   >
-                    <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span className="truncate">{list.name}</span>
-                  </button>
+                    <button
+                      onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
+                      className="flex items-center gap-2 flex-1 min-w-0"
+                    >
+                      <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      <span className="truncate">{list.name}</span>
+                    </button>
+                    {hoveredList === list.id && (
+                      <div className="flex gap-0.5 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenListModal(list)
+                          }}
+                          className="p-1 hover:bg-blue-200 rounded transition-colors"
+                          title="Redaktə et"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteList(e, list.id)}
+                          className="p-1 hover:bg-red-100 hover:text-red-600 rounded transition-colors"
+                          title="Sil"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </li>
               ))}
               <li>
                 <button
-                  onClick={() => setIsListModalOpen(true)}
+                  onClick={() => handleOpenListModal()}
                   className="w-full text-left px-2 py-1 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -718,10 +843,13 @@ const FolderItem = ({
 
       <TaskListFormModal
         isOpen={isListModalOpen}
-        onClose={() => setIsListModalOpen(false)}
+        onClose={handleCloseListModal}
         folderId={folder.id}
+        list={editingList}
         createTaskList={createTaskList}
+        updateTaskList={updateTaskList}
         isCreating={isCreatingList}
+        isUpdating={isUpdatingList}
         onListCreated={(listId) => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${listId}`)}
       />
     </li>
@@ -733,34 +861,47 @@ const TaskListFormModal = ({
   onClose,
   folderId,
   spaceId,
+  list,
   createTaskList,
+  updateTaskList,
   isCreating,
+  isUpdating,
   onListCreated,
 }) => {
   const [name, setName] = useState('')
 
   useEffect(() => {
     if (isOpen) {
-      setName('')
+      if (list) {
+        setName(list.name || '')
+      } else {
+        setName('')
+      }
     }
-  }, [isOpen])
+  }, [isOpen, list])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!name.trim()) return
 
     try {
-      const payload = { name: name.trim() }
-      if (folderId) {
-        payload.folderId = folderId
-      } else if (spaceId) {
-        payload.spaceId = spaceId
-      }
-      const newList = await createTaskList(payload).unwrap()
-      toast.success('Siyahı yaradıldı!')
-      onClose()
-      if (onListCreated && newList?.id) {
-        onListCreated(newList.id)
+      if (list) {
+        await updateTaskList({ id: list.id, name: name.trim() }).unwrap()
+        toast.success('Siyahı yeniləndi!')
+        onClose()
+      } else {
+        const payload = { name: name.trim() }
+        if (folderId) {
+          payload.folderId = folderId
+        } else if (spaceId) {
+          payload.spaceId = spaceId
+        }
+        const newList = await createTaskList(payload).unwrap()
+        toast.success('Siyahı yaradıldı!')
+        onClose()
+        if (onListCreated && newList?.id) {
+          onListCreated(newList.id)
+        }
       }
     } catch (error) {
       toast.error(error?.data?.message || 'Xəta baş verdi!')
@@ -771,7 +912,7 @@ const TaskListFormModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Yeni siyahı"
+      title={list ? 'Siyahını redaktə et' : 'Yeni siyahı'}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -799,10 +940,10 @@ const TaskListFormModal = ({
           </button>
           <button
             type="submit"
-            disabled={isCreating || !name.trim()}
+            disabled={isCreating || isUpdating || !name.trim()}
             className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
-            {isCreating ? 'Yaradılır...' : 'Yarat'}
+            {isCreating || isUpdating ? 'Yüklənir...' : list ? 'Yenilə' : 'Yarat'}
           </button>
         </div>
       </form>
@@ -826,18 +967,20 @@ const FolderFormModal = ({
   })
 
   useEffect(() => {
-    if (folder) {
-      setFormData({
-        name: folder.name || '',
-        description: folder.description || '',
-      })
-    } else {
-      setFormData({
-        name: '',
-        description: '',
-      })
+    if (isOpen) {
+      if (folder) {
+        setFormData({
+          name: folder.name || '',
+          description: folder.description || '',
+        })
+      } else {
+        setFormData({
+          name: '',
+          description: '',
+        })
+      }
     }
-  }, [folder])
+  }, [folder, isOpen])
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })

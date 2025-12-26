@@ -1,12 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router'
+import { useDispatch } from 'react-redux'
 import { useVerifyQuery } from '../services/authApi'
+import { authApi } from '../services/authApi'
+import { adminApi } from '../services/adminApi'
+import { chatApi } from '../services/chatApi'
 import { toast } from 'react-toastify'
 
 const Header = ({ onMenuClick }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
   const navigate = useNavigate()
+  const dispatch = useDispatch()
   const { data: currentUser } = useVerifyQuery()
 
   // Close dropdown when clicking outside
@@ -23,6 +28,10 @@ const Header = ({ onMenuClick }) => {
 
   const handleLogout = () => {
     localStorage.removeItem('token')
+    // Clear all RTK Query caches on logout
+    dispatch(authApi.util.resetApiState())
+    dispatch(adminApi.util.resetApiState())
+    dispatch(chatApi.util.resetApiState())
     toast.success('Çıxış edildi!')
     navigate('/login')
   }

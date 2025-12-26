@@ -36,7 +36,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: spaceData,
       }),
-      invalidatesTags: ['Spaces'],
+      invalidatesTags: ['Spaces', 'ActivityLogs'],
     }),
 
     updateSpace: builder.mutation({
@@ -45,7 +45,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: spaceData,
       }),
-      invalidatesTags: ['Spaces'],
+      invalidatesTags: ['Spaces', 'ActivityLogs'],
     }),
 
     deleteSpace: builder.mutation({
@@ -53,7 +53,7 @@ export const adminApi = createApi({
         url: `/api/space/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Spaces'],
+      invalidatesTags: ['Spaces', 'Trash', 'ActivityLogs'],
     }),
 
     // Get all users
@@ -134,7 +134,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: folderData,
       }),
-      invalidatesTags: ['Folders'],
+      invalidatesTags: ['Folders', 'ActivityLogs'],
     }),
 
     // Update folder
@@ -144,7 +144,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: folderData,
       }),
-      invalidatesTags: ['Folders'],
+      invalidatesTags: ['Folders', 'ActivityLogs'],
     }),
 
     // Delete folder
@@ -153,7 +153,7 @@ export const adminApi = createApi({
         url: `/api/folder/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Folders'],
+      invalidatesTags: ['Folders', 'Trash', 'ActivityLogs'],
     }),
 
     // Get task lists by folder
@@ -183,7 +183,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskListData,
       }),
-      invalidatesTags: ['TaskLists'],
+      invalidatesTags: ['TaskLists', 'ActivityLogs'],
     }),
 
     // Update task list
@@ -193,7 +193,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskListData,
       }),
-      invalidatesTags: ['TaskLists'],
+      invalidatesTags: ['TaskLists', 'ActivityLogs'],
     }),
 
     // Delete task list
@@ -202,7 +202,7 @@ export const adminApi = createApi({
         url: `/api/task-list/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['TaskLists'],
+      invalidatesTags: ['TaskLists', 'Trash', 'ActivityLogs'],
     }),
 
     // Get tasks by task list
@@ -226,7 +226,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskData,
       }),
-      invalidatesTags: ['Tasks'],
+      invalidatesTags: ['Tasks', 'ActivityLogs'],
     }),
 
     // Update task
@@ -236,7 +236,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskData,
       }),
-      invalidatesTags: ['Tasks'],
+      invalidatesTags: ['Tasks', 'ActivityLogs'],
     }),
 
     // Delete task
@@ -245,7 +245,7 @@ export const adminApi = createApi({
         url: `/api/task/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Tasks'],
+      invalidatesTags: ['Tasks', 'Trash', 'ActivityLogs'],
     }),
 
     // Reorder task
@@ -322,7 +322,7 @@ export const adminApi = createApi({
         url: `/api/trash/restore/space/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Trash', 'Spaces'],
+      invalidatesTags: ['Trash', 'Spaces', 'ActivityLogs'],
     }),
 
     restoreFolder: builder.mutation({
@@ -330,7 +330,7 @@ export const adminApi = createApi({
         url: `/api/trash/restore/folder/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Trash', 'Folders'],
+      invalidatesTags: ['Trash', 'Folders', 'ActivityLogs'],
     }),
 
     restoreList: builder.mutation({
@@ -338,7 +338,7 @@ export const adminApi = createApi({
         url: `/api/trash/restore/list/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Trash', 'TaskLists'],
+      invalidatesTags: ['Trash', 'TaskLists', 'ActivityLogs'],
     }),
 
     restoreTask: builder.mutation({
@@ -346,7 +346,7 @@ export const adminApi = createApi({
         url: `/api/trash/restore/task/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Trash', 'Tasks'],
+      invalidatesTags: ['Trash', 'Tasks', 'ActivityLogs'],
     }),
 
     permanentDeleteSpace: builder.mutation({
