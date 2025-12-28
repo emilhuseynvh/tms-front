@@ -8,6 +8,7 @@ import { chatApi } from '../services/chatApi'
 let globalSocket = null
 let joinedRooms = new Set()
 let currentUserId = null // Store current user ID globally
+let currentActiveRoomId = null // Store currently active room ID globally
 
 export const useWebSocket = (roomId, allRooms = [], userId = null) => {
   const dispatch = useDispatch()
@@ -169,13 +170,13 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
                   createdAt: message.createdAt,
                 }
                 // Increment unread count if not current room
-                const isCurrentRoom = currentRoomId.current === message.roomId
+                const isCurrentRoom = currentActiveRoomId === message.roomId
                 const isOwnMessage = String(message.senderId) === String(currentUserId)
 
                 console.log('Notification check:', {
                   isCurrentRoom,
                   isOwnMessage,
-                  currentRoomId: currentRoomId.current,
+                  currentActiveRoomId: currentActiveRoomId,
                   messageRoomId: message.roomId,
                   messageSenderId: message.senderId,
                   currentUserId: currentUserId
@@ -310,6 +311,12 @@ export const useWebSocketSend = () => {
       return false
     }
   }
+}
+
+// Helper to set current active room ID (for unread count tracking)
+export const setCurrentActiveRoomId = (roomId) => {
+  currentActiveRoomId = roomId
+  console.log('WebSocket: Current active room ID updated to:', currentActiveRoomId)
 }
 
 // Helper to disconnect socket (for logout)

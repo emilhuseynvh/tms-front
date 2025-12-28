@@ -11,7 +11,7 @@ import { useVerifyQuery } from '../services/authApi'
 import { useGetUsersQuery } from '../services/adminApi'
 import CreateGroupChatModal from './CreateGroupChatModal'
 import { toast } from 'react-toastify'
-import { useWebSocketSend } from '../hooks/useWebSocket'
+import { useWebSocketSend, setCurrentActiveRoomId } from '../hooks/useWebSocket'
 
 // Emoji categories
 const emojiCategories = {
@@ -139,6 +139,16 @@ const FloatingChat = () => {
       markAsRead(selectedRoom.id)
     }
   }, [selectedRoom, markAsRead])
+
+  // Update global active room ID for unread count tracking
+  useEffect(() => {
+    // Only set active room if chat panel is open AND a room is selected
+    if (isOpen && selectedRoom?.id) {
+      setCurrentActiveRoomId(selectedRoom.id)
+    } else {
+      setCurrentActiveRoomId(null)
+    }
+  }, [selectedRoom, isOpen])
 
   const handleSendMessage = async (e) => {
     e.preventDefault()
