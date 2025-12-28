@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router'
 import {
   useGetTasksByListQuery,
@@ -11,6 +12,7 @@ import {
 } from '../services/adminApi'
 import Modal from '../components/Modal'
 import TaskNotifications from '../components/TaskNotifications'
+import TaskActivityTooltip from '../components/TaskActivityTooltip'
 import { toast } from 'react-toastify'
 
 const TaskDetail = () => {
@@ -182,6 +184,16 @@ const TaskDetail = () => {
     }
   }
 
+  const handleDateChange = async (taskId, field, value) => {
+    try {
+      const payload = { id: taskId }
+      payload[field] = value ? new Date(value).toISOString() : null
+      await updateTask(payload).unwrap()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
   // Drag and Drop handlers
   const handleDragStart = (e, task, index) => {
     setDraggedTask({ task, index })
@@ -234,6 +246,49 @@ const TaskDetail = () => {
     return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
+  const formatRelativeTime = (dateString) => {
+    if (!dateString) return '-'
+
+    // Server UTC-də saxlayır, timezone offset-i düzəldirik
+    let date = new Date(dateString)
+
+    // Əgər tarixdə timezone yoxdursa (Z və ya +00:00), UTC kimi qəbul et
+    if (!dateString.includes('Z') && !dateString.includes('+')) {
+      // Server vaxtını UTC kimi parse et
+      date = new Date(dateString + 'Z')
+    }
+
+    const now = new Date()
+    let diff = now.getTime() - date.getTime()
+
+    // Mənfi fərq varsa (gələcək tarix), 0 qəbul et
+    if (diff < 0) diff = 0
+
+    const seconds = Math.floor(diff / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+
+    if (seconds < 60) return 'İndicə'
+    if (minutes < 60) return `${minutes} dəq əvvəl`
+    if (hours < 24) {
+      const remainingMinutes = minutes % 60
+      if (remainingMinutes === 0) return `${hours} saat əvvəl`
+      return `${hours}s ${remainingMinutes}dəq`
+    }
+    if (days < 7) {
+      const remainingHours = hours % 24
+      if (remainingHours === 0) return `${days} gün əvvəl`
+      return `${days}g ${remainingHours}s`
+    }
+    if (days < 30) return `${Math.floor(days / 7)} həftə əvvəl`
+
+    return date.toLocaleDateString('az-AZ', {
+      day: 'numeric',
+      month: 'short'
+    })
+  }
+
   // Get root tasks (tasks with parentId === null)
   const rootTasks = useMemo(() => {
     if (!tasks || tasks.length === 0) return []
@@ -267,10 +322,8 @@ const TaskDetail = () => {
     const isExpanded = expandedTasks.has(task.id)
     const isHovered = hoveredTaskId === task.id
     const isEditingTitle = editingField?.taskId === task.id && editingField?.field === 'title'
-    const isEditingDesc = editingField?.taskId === task.id && editingField?.field === 'description'
+    const isEditingDescription = editingField?.taskId === task.id && editingField?.field === 'description'
     const isEditingLink = editingField?.taskId === task.id && editingField?.field === 'link'
-    const isEditingStartAt = editingField?.taskId === task.id && editingField?.field === 'startAt'
-    const isEditingDueAt = editingField?.taskId === task.id && editingField?.field === 'dueAt'
 
     return (
       <>
@@ -381,6 +434,35 @@ const TaskDetail = () => {
               </div>
             </div>
           </td>
+          <td className="px-2 py-2">
+            {isEditingDescription ? (
+              <textarea
+                autoFocus
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                onBlur={() => saveInlineEdit(task.id, 'description')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    cancelEditing()
+                  } else if (e.key === 'Enter' && e.ctrlKey) {
+                    saveInlineEdit(task.id, 'description')
+                  }
+                }}
+                className="w-full px-1.5 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                rows={2}
+              />
+            ) : (
+              <div
+                onClick={() => startEditing(task.id, 'description', task.description)}
+                className="cursor-text hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5 min-h-[24px]"
+                title={task.description || 'Açıqlama əlavə et'}
+              >
+                <div className="text-xs text-gray-600 truncate">
+                  {task.description || <span className="text-gray-400 italic">Açıqlama yoxdur</span>}
+                </div>
+              </div>
+            )}
+          </td>
           <td className="px-2 py-2 whitespace-nowrap">
             <select
               value={task.statusId || ''}
@@ -402,45 +484,38 @@ const TaskDetail = () => {
               onUpdate={handleAssigneesChange}
             />
           </td>
-          <td className="px-2 py-2 whitespace-nowrap">
-            {isEditingStartAt ? (
-              <input
-                type="datetime-local"
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onBlur={() => saveInlineEdit(task.id, 'startAt')}
-                onKeyDown={(e) => handleKeyDown(e, task.id, 'startAt')}
-                autoFocus
-                className="text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            ) : (
-              <div
-                onClick={() => startEditing(task.id, 'startAt', formatDateTimeLocal(task.startAt))}
-                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded text-xs text-gray-600"
-              >
-                {formatDate(task.startAt)}
+          <td className="px-2 py-2">
+            <TaskActivityTooltip taskId={task.id}>
+              <div className="flex items-center gap-1.5 cursor-pointer group">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-blue-50 to-indigo-100 group-hover:from-blue-100 group-hover:to-indigo-200 transition-all duration-200 shadow-sm">
+                  <svg className="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-gray-700 group-hover:text-indigo-700 transition-colors">
+                    {formatRelativeTime(task.updatedAt)}
+                  </span>
+                </div>
+                <svg className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
-            )}
+            </TaskActivityTooltip>
           </td>
           <td className="px-2 py-2 whitespace-nowrap">
-            {isEditingDueAt ? (
-              <input
-                type="datetime-local"
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onBlur={() => saveInlineEdit(task.id, 'dueAt')}
-                onKeyDown={(e) => handleKeyDown(e, task.id, 'dueAt')}
-                autoFocus
-                className="text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            ) : (
-              <div
-                onClick={() => startEditing(task.id, 'dueAt', formatDateTimeLocal(task.dueAt))}
-                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded text-xs text-gray-600"
-              >
-                {formatDate(task.dueAt)}
-              </div>
-            )}
+            <InlineDatePicker
+              value={task.startAt}
+              onChange={(value) => handleDateChange(task.id, 'startAt', value)}
+              placeholder="Başlama"
+            />
+          </td>
+          <td className="px-2 py-2 whitespace-nowrap">
+            <InlineDatePicker
+              value={task.dueAt}
+              onChange={(value) => handleDateChange(task.id, 'dueAt', value)}
+              placeholder="Bitmə"
+            />
           </td>
           <td className="px-2 py-2">
             {isEditingLink ? (
@@ -722,16 +797,18 @@ const TaskDetail = () => {
         <>
           {/* Desktop Table View */}
           <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto overflow-y-visible">
-            <table className="w-full" style={{ minWidth: '900px' }}>
+            <table className="w-full table-fixed" style={{ minWidth: '1450px' }}>
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-8"></th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Başlıq</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Status</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Təyin edilib</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Başlama</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">Bitmə</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Link</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-12"></th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[250px]">Başlıq</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[200px]">Açıqlama</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[130px]">Status</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[160px]">Təyin edilib</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[150px]">Son yenilənmə</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[160px]">Başlama</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[160px]">Bitmə</th>
+                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[180px]">Link</th>
                 </tr>
               </thead>
               <tbody>
@@ -1137,12 +1214,10 @@ const TaskFormModal = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Başlama tarixi
             </label>
-            <input
-              type="datetime-local"
-              name="startAt"
+            <ModalDatePicker
               value={formData.startAt}
-              onChange={handleChange}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={(value) => setFormData({ ...formData, startAt: value })}
+              placeholder="Başlama tarixi seç"
             />
           </div>
 
@@ -1150,12 +1225,10 @@ const TaskFormModal = ({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Bitmə tarixi
             </label>
-            <input
-              type="datetime-local"
-              name="dueAt"
+            <ModalDatePicker
               value={formData.dueAt}
-              onChange={handleChange}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={(value) => setFormData({ ...formData, dueAt: value })}
+              placeholder="Bitmə tarixi seç"
             />
           </div>
         </div>
@@ -1231,6 +1304,788 @@ const TaskFormModal = ({
         </div>
       </form>
     </Modal>
+  )
+}
+
+// Modal Date Picker Component - fuller style for modals
+const ModalDatePicker = ({ value, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedTime, setSelectedTime] = useState({ hours: '12', minutes: '00' })
+  const triggerRef = useRef(null)
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    if (value) {
+      const date = new Date(value)
+      if (!isNaN(date.getTime())) {
+        setSelectedDate(date)
+        setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+        setSelectedTime({
+          hours: String(date.getHours()).padStart(2, '0'),
+          minutes: String(date.getMinutes()).padStart(2, '0')
+        })
+      }
+    } else {
+      setSelectedDate(null)
+      setSelectedTime({ hours: '12', minutes: '00' })
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      const dropdownWidth = 520
+      const dropdownHeight = 420
+
+      let top = rect.bottom + 4
+      let left = rect.left
+
+      if (top + dropdownHeight > window.innerHeight) {
+        top = rect.top - dropdownHeight - 4
+      }
+
+      if (left + dropdownWidth > window.innerWidth) {
+        left = window.innerWidth - dropdownWidth - 16
+      }
+
+      if (left < 16) {
+        left = 16
+      }
+
+      setPosition({ top, left })
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
+      ) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  const getQuickOptions = () => {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    const addDays = (date, days) => {
+      const result = new Date(date)
+      result.setDate(result.getDate() + days)
+      return result
+    }
+
+    const getNextWeekday = (dayOfWeek) => {
+      const result = new Date(today)
+      const currentDay = result.getDay()
+      const daysUntil = (dayOfWeek - currentDay + 7) % 7 || 7
+      result.setDate(result.getDate() + daysUntil)
+      return result
+    }
+
+    const formatShortDate = (date) => {
+      const days = ['Baz', 'B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən']
+      const diffDays = Math.floor((date - today) / (1000 * 60 * 60 * 24))
+      if (diffDays < 7) {
+        return days[date.getDay()]
+      }
+      return `${date.getDate()} ${['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avq', 'sen', 'okt', 'noy', 'dek'][date.getMonth()]}`
+    }
+
+    const laterToday = new Date(now)
+    laterToday.setHours(20, 16, 0, 0)
+    if (laterToday <= now) {
+      laterToday.setDate(laterToday.getDate() + 1)
+    }
+
+    return [
+      { label: 'Bugün', date: today, shortDate: formatShortDate(today) },
+      { label: 'Sonra', date: laterToday, shortDate: `${laterToday.getHours()}:${String(laterToday.getMinutes()).padStart(2, '0')}` },
+      { label: 'Sabah', date: addDays(today, 1), shortDate: formatShortDate(addDays(today, 1)) },
+      { label: 'Bu həftə sonu', date: getNextWeekday(6), shortDate: formatShortDate(getNextWeekday(6)) },
+      { label: 'Gələn həftə', date: getNextWeekday(1), shortDate: formatShortDate(getNextWeekday(1)) },
+      { label: 'Gələn həftə sonu', date: addDays(getNextWeekday(6), 7), shortDate: formatShortDate(addDays(getNextWeekday(6), 7)) },
+      { label: '2 həftə', date: addDays(today, 14), shortDate: formatShortDate(addDays(today, 14)) },
+      { label: '4 həftə', date: addDays(today, 28), shortDate: formatShortDate(addDays(today, 28)) },
+    ]
+  }
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+
+    const days = []
+
+    const prevMonthLastDay = new Date(year, month, 0).getDate()
+    for (let i = startingDay - 1; i >= 0; i--) {
+      days.push({
+        day: prevMonthLastDay - i,
+        isCurrentMonth: false,
+        date: new Date(year, month - 1, prevMonthLastDay - i)
+      })
+    }
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: true,
+        date: new Date(year, month, i)
+      })
+    }
+
+    const remainingDays = 42 - days.length
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: false,
+        date: new Date(year, month + 1, i)
+      })
+    }
+
+    return days
+  }
+
+  const isToday = (date) => {
+    const today = new Date()
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    )
+  }
+
+  const isSelected = (date) => {
+    if (!selectedDate) return false
+    return (
+      date.getDate() === selectedDate.getDate() &&
+      date.getMonth() === selectedDate.getMonth() &&
+      date.getFullYear() === selectedDate.getFullYear()
+    )
+  }
+
+  const handleQuickSelect = (option) => {
+    const date = new Date(option.date)
+    if (option.label === 'Sonra') {
+      setSelectedTime({
+        hours: String(date.getHours()).padStart(2, '0'),
+        minutes: String(date.getMinutes()).padStart(2, '0')
+      })
+    } else {
+      date.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
+    }
+    setSelectedDate(date)
+    setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    applyDate(date)
+  }
+
+  const handleDayClick = (dayInfo) => {
+    const date = new Date(dayInfo.date)
+    date.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
+    setSelectedDate(date)
+    if (!dayInfo.isCurrentMonth) {
+      setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
+  }
+
+  const applyDate = (date) => {
+    if (date) {
+      const finalDate = new Date(date)
+      finalDate.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
+      const formatted = finalDate.toISOString().slice(0, 16)
+      onChange(formatted)
+    }
+    setIsOpen(false)
+  }
+
+  const handleClear = () => {
+    setSelectedDate(null)
+    onChange('')
+    setIsOpen(false)
+  }
+
+  const formatDisplayValue = () => {
+    if (!value) return placeholder
+    const date = new Date(value)
+    if (isNaN(date.getTime())) return placeholder
+
+    const day = date.getDate()
+    const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
+    const month = months[date.getMonth()]
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+
+    return `${day} ${month} ${hours}:${minutes}`
+  }
+
+  const monthNames = [
+    'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'İyun',
+    'İyul', 'Avqust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'
+  ]
+
+  const dayNames = ['B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən', 'Baz']
+
+  const quickOptions = getQuickOptions()
+  const calendarDays = getDaysInMonth(currentMonth)
+
+  return (
+    <>
+      <div
+        ref={triggerRef}
+        onClick={() => setIsOpen(!isOpen)}
+        className="cursor-pointer flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:border-gray-400 transition-colors bg-white"
+      >
+        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className={`text-sm flex-1 ${value ? 'text-gray-900' : 'text-gray-400'}`}>
+          {formatDisplayValue()}
+        </span>
+        {value && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleClear()
+            }}
+            className="p-0.5 hover:bg-gray-100 rounded"
+          >
+            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {isOpen && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
+          style={{ top: position.top, left: position.left, width: '520px' }}
+        >
+          <div className="flex">
+            <div className="w-[200px] border-r border-gray-100 py-2 bg-gray-50/50">
+              {quickOptions.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQuickSelect(option)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white transition-colors whitespace-nowrap"
+                >
+                  <span className="text-gray-700">{option.label}</span>
+                  <span className="text-gray-400 text-xs ml-3">{option.shortDate}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-gray-800">
+                  {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const today = new Date()
+                      setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+                    }}
+                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                  >
+                    Bugün
+                  </button>
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {dayNames.map((day, index) => (
+                  <div key={index} className="text-center text-xs font-medium text-gray-400 py-1">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((dayInfo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleDayClick(dayInfo)}
+                    className={`
+                      w-9 h-9 text-sm rounded-full flex items-center justify-center transition-all
+                      ${!dayInfo.isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                      ${isToday(dayInfo.date) && !isSelected(dayInfo.date) ? 'bg-red-100 text-red-600 font-medium' : ''}
+                      ${isSelected(dayInfo.date) ? 'bg-blue-500 text-white font-medium' : ''}
+                      ${dayInfo.isCurrentMonth && !isSelected(dayInfo.date) && !isToday(dayInfo.date) ? 'hover:bg-gray-100' : ''}
+                    `}
+                  >
+                    {dayInfo.day}
+                  </button>
+                ))}
+              </div>
+
+              {selectedDate && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-gray-500">
+                      {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="23"
+                        value={selectedTime.hours}
+                        onChange={(e) => setSelectedTime({ ...selectedTime, hours: e.target.value.padStart(2, '0') })}
+                        className="w-10 px-1 py-1 text-xs text-center border border-gray-200 rounded"
+                      />
+                      <span className="text-gray-400">:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={selectedTime.minutes}
+                        onChange={(e) => setSelectedTime({ ...selectedTime, minutes: e.target.value.padStart(2, '0') })}
+                        className="w-10 px-1 py-1 text-xs text-center border border-gray-200 rounded"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleClear}
+                      className="flex-1 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      Təmizlə
+                    </button>
+                    <button
+                      onClick={() => applyDate(selectedDate)}
+                      className="flex-1 px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600"
+                    >
+                      Təsdiqlə
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+// Inline Date Picker Component for table cells
+const InlineDatePicker = ({ value, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(null)
+  const [selectedTime, setSelectedTime] = useState({ hours: '12', minutes: '00' })
+  const triggerRef = useRef(null)
+  const dropdownRef = useRef(null)
+
+  // Parse initial value
+  useEffect(() => {
+    if (value) {
+      const date = new Date(value)
+      if (!isNaN(date.getTime())) {
+        setSelectedDate(date)
+        setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+        setSelectedTime({
+          hours: String(date.getHours()).padStart(2, '0'),
+          minutes: String(date.getMinutes()).padStart(2, '0')
+        })
+      }
+    } else {
+      setSelectedDate(null)
+      setSelectedTime({ hours: '12', minutes: '00' })
+    }
+  }, [value])
+
+  // Position dropdown
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      const dropdownWidth = 520
+      const dropdownHeight = 420
+
+      let top = rect.bottom + 4
+      let left = rect.left
+
+      if (top + dropdownHeight > window.innerHeight) {
+        top = rect.top - dropdownHeight - 4
+      }
+
+      if (left + dropdownWidth > window.innerWidth) {
+        left = window.innerWidth - dropdownWidth - 16
+      }
+
+      if (left < 16) {
+        left = 16
+      }
+
+      setPosition({ top, left })
+    }
+  }, [isOpen])
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target)
+      ) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  const getQuickOptions = () => {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    const addDays = (date, days) => {
+      const result = new Date(date)
+      result.setDate(result.getDate() + days)
+      return result
+    }
+
+    const getNextWeekday = (dayOfWeek) => {
+      const result = new Date(today)
+      const currentDay = result.getDay()
+      const daysUntil = (dayOfWeek - currentDay + 7) % 7 || 7
+      result.setDate(result.getDate() + daysUntil)
+      return result
+    }
+
+    const formatShortDate = (date) => {
+      const days = ['Baz', 'B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən']
+      const diffDays = Math.floor((date - today) / (1000 * 60 * 60 * 24))
+      if (diffDays < 7) {
+        return days[date.getDay()]
+      }
+      return `${date.getDate()} ${['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avq', 'sen', 'okt', 'noy', 'dek'][date.getMonth()]}`
+    }
+
+    const laterToday = new Date(now)
+    laterToday.setHours(20, 16, 0, 0)
+    if (laterToday <= now) {
+      laterToday.setDate(laterToday.getDate() + 1)
+    }
+
+    return [
+      { label: 'Bugün', date: today, shortDate: formatShortDate(today) },
+      { label: 'Sonra', date: laterToday, shortDate: `${laterToday.getHours()}:${String(laterToday.getMinutes()).padStart(2, '0')}` },
+      { label: 'Sabah', date: addDays(today, 1), shortDate: formatShortDate(addDays(today, 1)) },
+      { label: 'Bu həftə sonu', date: getNextWeekday(6), shortDate: formatShortDate(getNextWeekday(6)) },
+      { label: 'Gələn həftə', date: getNextWeekday(1), shortDate: formatShortDate(getNextWeekday(1)) },
+      { label: 'Gələn həftə sonu', date: addDays(getNextWeekday(6), 7), shortDate: formatShortDate(addDays(getNextWeekday(6), 7)) },
+      { label: '2 həftə', date: addDays(today, 14), shortDate: formatShortDate(addDays(today, 14)) },
+      { label: '4 həftə', date: addDays(today, 28), shortDate: formatShortDate(addDays(today, 28)) },
+    ]
+  }
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+
+    const days = []
+
+    const prevMonthLastDay = new Date(year, month, 0).getDate()
+    for (let i = startingDay - 1; i >= 0; i--) {
+      days.push({
+        day: prevMonthLastDay - i,
+        isCurrentMonth: false,
+        date: new Date(year, month - 1, prevMonthLastDay - i)
+      })
+    }
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: true,
+        date: new Date(year, month, i)
+      })
+    }
+
+    const remainingDays = 42 - days.length
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({
+        day: i,
+        isCurrentMonth: false,
+        date: new Date(year, month + 1, i)
+      })
+    }
+
+    return days
+  }
+
+  const isToday = (date) => {
+    const today = new Date()
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    )
+  }
+
+  const isSelected = (date) => {
+    if (!selectedDate) return false
+    return (
+      date.getDate() === selectedDate.getDate() &&
+      date.getMonth() === selectedDate.getMonth() &&
+      date.getFullYear() === selectedDate.getFullYear()
+    )
+  }
+
+  const handleQuickSelect = (option) => {
+    const date = new Date(option.date)
+    if (option.label === 'Sonra') {
+      setSelectedTime({
+        hours: String(date.getHours()).padStart(2, '0'),
+        minutes: String(date.getMinutes()).padStart(2, '0')
+      })
+    } else {
+      date.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
+    }
+    setSelectedDate(date)
+    setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    applyDate(date)
+  }
+
+  const handleDayClick = (dayInfo) => {
+    const date = new Date(dayInfo.date)
+    date.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
+    setSelectedDate(date)
+    if (!dayInfo.isCurrentMonth) {
+      setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    }
+  }
+
+  const applyDate = (date) => {
+    if (date) {
+      const finalDate = new Date(date)
+      finalDate.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
+      const formatted = finalDate.toISOString().slice(0, 16)
+      onChange(formatted)
+    }
+    setIsOpen(false)
+  }
+
+  const handleClear = () => {
+    setSelectedDate(null)
+    onChange('')
+    setIsOpen(false)
+  }
+
+  const formatDisplayValue = () => {
+    if (!value) return placeholder
+    const date = new Date(value)
+    if (isNaN(date.getTime())) return placeholder
+
+    const day = date.getDate()
+    const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
+    const month = months[date.getMonth()]
+
+    return `${day} ${month}`
+  }
+
+  const monthNames = [
+    'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'İyun',
+    'İyul', 'Avqust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'
+  ]
+
+  const dayNames = ['B.e', 'Ç.a', 'Çər', 'C.a', 'Cüm', 'Şən', 'Baz']
+
+  const quickOptions = getQuickOptions()
+  const calendarDays = getDaysInMonth(currentMonth)
+
+  return (
+    <>
+      <div
+        ref={triggerRef}
+        onClick={() => setIsOpen(!isOpen)}
+        className="cursor-pointer flex items-center gap-1.5 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+      >
+        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className={`text-xs ${value ? 'text-gray-700' : 'text-gray-400'}`}>
+          {formatDisplayValue()}
+        </span>
+      </div>
+
+      {isOpen && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
+          style={{ top: position.top, left: position.left, width: '520px' }}
+        >
+          <div className="flex">
+            {/* Left - Quick options */}
+            <div className="w-[200px] border-r border-gray-100 py-2 bg-gray-50/50">
+              {quickOptions.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQuickSelect(option)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white transition-colors whitespace-nowrap"
+                >
+                  <span className="text-gray-700">{option.label}</span>
+                  <span className="text-gray-400 text-xs ml-3">{option.shortDate}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Right - Calendar */}
+            <div className="flex-1 p-4">
+              {/* Month navigation */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-gray-800">
+                  {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const today = new Date()
+                      setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+                    }}
+                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                  >
+                    Bugün
+                  </button>
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Day names */}
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {dayNames.map((day, index) => (
+                  <div key={index} className="text-center text-xs font-medium text-gray-400 py-1">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Calendar days */}
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((dayInfo, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleDayClick(dayInfo)}
+                    className={`
+                      w-9 h-9 text-sm rounded-full flex items-center justify-center transition-all
+                      ${!dayInfo.isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                      ${isToday(dayInfo.date) && !isSelected(dayInfo.date) ? 'bg-red-100 text-red-600 font-medium' : ''}
+                      ${isSelected(dayInfo.date) ? 'bg-blue-500 text-white font-medium' : ''}
+                      ${dayInfo.isCurrentMonth && !isSelected(dayInfo.date) && !isToday(dayInfo.date) ? 'hover:bg-gray-100' : ''}
+                    `}
+                  >
+                    {dayInfo.day}
+                  </button>
+                ))}
+              </div>
+
+              {/* Time & Actions */}
+              {selectedDate && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-gray-500">
+                      {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="23"
+                        value={selectedTime.hours}
+                        onChange={(e) => setSelectedTime({ ...selectedTime, hours: e.target.value.padStart(2, '0') })}
+                        className="w-10 px-1 py-1 text-xs text-center border border-gray-200 rounded"
+                      />
+                      <span className="text-gray-400">:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={selectedTime.minutes}
+                        onChange={(e) => setSelectedTime({ ...selectedTime, minutes: e.target.value.padStart(2, '0') })}
+                        className="w-10 px-1 py-1 text-xs text-center border border-gray-200 rounded"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleClear}
+                      className="flex-1 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    >
+                      Təmizlə
+                    </button>
+                    <button
+                      onClick={() => applyDate(selectedDate)}
+                      className="flex-1 px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600"
+                    >
+                      Təsdiqlə
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 

@@ -1,10 +1,23 @@
-import { useState } from 'react'
-import { useGetTaskActivitiesQuery } from '../services/adminApi'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { useGetTaskActivitiesQuery, useGetUsersQuery, useGetTaskStatusesQuery } from '../services/adminApi'
 
 const formatDate = (dateString) => {
-  const date = new Date(dateString)
+  if (!dateString) return '-'
+
+  // Server UTC-də saxlayır, timezone offset-i düzəldirik
+  let date = new Date(dateString)
+
+  // Əgər tarixdə timezone yoxdursa (Z və ya +00:00), UTC kimi qəbul et
+  if (!dateString.includes('Z') && !dateString.includes('+')) {
+    date = new Date(dateString + 'Z')
+  }
+
   const now = new Date()
-  const diff = now - date
+  let diff = now.getTime() - date.getTime()
+
+  if (diff < 0) diff = 0
+
   const seconds = Math.floor(diff / 1000)
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
@@ -12,8 +25,16 @@ const formatDate = (dateString) => {
 
   if (seconds < 60) return 'İndicə'
   if (minutes < 60) return `${minutes} dəq əvvəl`
-  if (hours < 24) return `${hours} saat əvvəl`
-  if (days < 7) return `${days} gün əvvəl`
+  if (hours < 24) {
+    const remainingMinutes = minutes % 60
+    if (remainingMinutes === 0) return `${hours} saat əvvəl`
+    return `${hours}s ${remainingMinutes}dəq əvvəl`
+  }
+  if (days < 7) {
+    const remainingHours = hours % 24
+    if (remainingHours === 0) return `${days} gün əvvəl`
+    return `${days}g ${remainingHours}s əvvəl`
+  }
 
   return date.toLocaleDateString('az-AZ', {
     day: 'numeric',
@@ -33,101 +54,261 @@ const getChangeLabel = (key) => {
     assignees: 'Təyin olunanlar',
     taskListId: 'Siyahı',
     is_message_send: 'Mesaj göndərildi',
+    link: 'Link',
   }
   return labels[key] || key
 }
 
+const getChangeIcon = (key) => {
+  const icons = {
+    title: '✏️',
+    description: '📝',
+    startAt: '📅',
+    dueAt: '⏰',
+    statusId: '🏷️',
+    assignees: '👥',
+    taskListId: '📋',
+    is_message_send: '📧',
+    link: '🔗',
+  }
+  return icons[key] || '📌'
+}
+
 const TaskActivityTooltip = ({ taskId, children }) => {
   const [isHovering, setIsHovering] = useState(false)
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
+  const containerRef = useRef(null)
+
   const { data: activities = [], isLoading } = useGetTaskActivitiesQuery(
     { taskId, limit: 10 },
     { skip: !isHovering }
   )
 
-  return (
+  const { data: users = [] } = useGetUsersQuery()
+  const { data: statuses = [] } = useGetTaskStatusesQuery()
+
+  // User ID-dən ada çevirmək üçün map yaradırıq
+  const userMap = {}
+  users.forEach(user => {
+    userMap[user.id] = user.name || user.username || user.email
+  })
+
+  // Status ID-dən ada çevirmək üçün map yaradırıq
+  const statusMap = {}
+  statuses.forEach(status => {
+    statusMap[status.id] = status.name
+  })
+
+  // Assignee ID-lərini adlara çevirən funksiya
+  const formatAssignees = (ids) => {
+    if (!Array.isArray(ids)) return '-'
+    if (ids.length === 0) return '-'
+    return ids.map(id => userMap[id] || `User #${id}`).join(', ')
+  }
+
+  useEffect(() => {
+    if (isHovering && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const tooltipWidth = 340
+      const tooltipHeight = 350
+
+      let top = rect.bottom + 8
+      let left = rect.left
+
+      // Aşağıda yer yoxdursa, yuxarıda göstər
+      if (top + tooltipHeight > window.innerHeight) {
+        top = rect.top - tooltipHeight - 8
+      }
+
+      // Sağda yer yoxdursa, sola sürüşdür
+      if (left + tooltipWidth > window.innerWidth) {
+        left = window.innerWidth - tooltipWidth - 16
+      }
+
+      // Solda yer yoxdursa
+      if (left < 16) {
+        left = 16
+      }
+
+      setTooltipPosition({ top, left })
+    }
+  }, [isHovering])
+
+  const formatValue = (value, key) => {
+    if (value === null || value === undefined) return '-'
+
+    // Assignees üçün xüsusi format
+    if (key === 'assignees' && Array.isArray(value)) {
+      return formatAssignees(value)
+    }
+
+    // StatusId üçün status adını göstər
+    if (key === 'statusId') {
+      return statusMap[value] || `Status #${value}`
+    }
+
+    if (Array.isArray(value)) return value.join(', ') || '-'
+    if (typeof value === 'boolean') return value ? 'Bəli' : 'Xeyr'
+    if (typeof value === 'string' && value.includes('T')) {
+      try {
+        const date = new Date(value)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('az-AZ', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          })
+        }
+      } catch {
+        // Not a date
+      }
+    }
+    return String(value).substring(0, 30) + (String(value).length > 30 ? '...' : '')
+  }
+
+  const tooltipContent = isHovering && createPortal(
     <div
-      className="relative inline-block"
+      className="fixed z-[9999] w-[340px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden"
+      style={{
+        top: tooltipPosition.top,
+        left: tooltipPosition.left,
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+      }}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
-      {children}
-
-      {isHovering && (
-        <div className="absolute z-50 left-0 top-full mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-            <h4 className="text-sm font-medium text-gray-700">Son əməliyyatlar</h4>
+      {/* Header */}
+      <div className="px-4 py-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
+          <div>
+            <h4 className="text-sm font-semibold text-white">Əməliyyat Tarixçəsi</h4>
+            <p className="text-xs text-white/70">Son 10 dəyişiklik</p>
+          </div>
+        </div>
+      </div>
 
-          <div className="max-h-64 overflow-y-auto">
-            {isLoading ? (
-              <div className="p-4 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-xs text-gray-500">Yüklənir...</p>
-              </div>
-            ) : activities.length === 0 ? (
-              <div className="p-4 text-center text-sm text-gray-500">
-                Əməliyyat tarixçəsi yoxdur
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {activities.map((activity) => (
-                  <div key={activity.id} className="px-3 py-2 hover:bg-gray-50">
+      {/* Content */}
+      <div className="max-h-72 overflow-y-auto">
+        {isLoading ? (
+          <div className="p-6 text-center">
+            <div className="relative w-12 h-12 mx-auto">
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+            </div>
+            <p className="mt-3 text-sm text-gray-500">Yüklənir...</p>
+          </div>
+        ) : activities.length === 0 ? (
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-gray-600">Tarixçə yoxdur</p>
+            <p className="text-xs text-gray-400 mt-1">Hələ heç bir dəyişiklik edilməyib</p>
+          </div>
+        ) : (
+          <div className="p-2">
+            {activities.map((activity, index) => (
+              <div
+                key={activity.id}
+                className={`relative p-3 rounded-xl transition-all duration-200 hover:bg-gray-50 ${
+                  index !== activities.length - 1 ? 'mb-1' : ''
+                }`}
+              >
+                {/* Timeline connector */}
+                {index !== activities.length - 1 && (
+                  <div className="absolute left-[22px] top-[44px] bottom-[-8px] w-0.5 bg-gradient-to-b from-indigo-200 to-transparent"></div>
+                )}
+
+                <div className="flex gap-3">
+                  {/* Avatar */}
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
+                      {(activity.username || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-900">
+                      <span className="text-sm font-semibold text-gray-800 truncate">
                         {activity.username || 'İstifadəçi'}
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-400 flex items-center gap-1 flex-shrink-0 ml-2">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                         {formatDate(activity.createdAt)}
                       </span>
                     </div>
+
                     {activity.changes && Object.keys(activity.changes).length > 0 && (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5 mt-2">
                         {Object.entries(activity.changes).map(([key, value]) => (
-                          <div key={key} className="text-xs">
-                            <span className="text-gray-500">{getChangeLabel(key)}:</span>
-                            {typeof value === 'object' && value.from !== undefined ? (
-                              <span className="ml-1">
-                                <span className="text-red-500 line-through">{formatValue(value.from)}</span>
-                                <span className="text-gray-400 mx-1">→</span>
-                                <span className="text-green-600">{formatValue(value.to)}</span>
-                              </span>
-                            ) : (
-                              <span className="ml-1 text-gray-700">{formatValue(value)}</span>
-                            )}
+                          <div
+                            key={key}
+                            className="flex items-start gap-2 text-xs bg-gray-50/80 rounded-lg p-2"
+                          >
+                            <span className="flex-shrink-0 text-sm">{getChangeIcon(key)}</span>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-gray-600">{getChangeLabel(key)}</span>
+                              {typeof value === 'object' && value.from !== undefined ? (
+                                <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 line-through text-xs">
+                                    {formatValue(value.from, key)}
+                                  </span>
+                                  <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                  </svg>
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">
+                                    {formatValue(value.to, key)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="ml-1 text-gray-700">{formatValue(value, key)}</span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                ))}
+                </div>
               </div>
-            )}
+            ))}
           </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      {activities.length > 0 && (
+        <div className="px-4 py-2 bg-gray-50/80 border-t border-gray-100">
+          <p className="text-xs text-center text-gray-400">
+            {activities.length} əməliyyat göstərilir
+          </p>
         </div>
       )}
+    </div>,
+    document.body
+  )
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative inline-block"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
+      {children}
+      {tooltipContent}
     </div>
   )
-}
-
-const formatValue = (value) => {
-  if (value === null || value === undefined) return '-'
-  if (Array.isArray(value)) return value.join(', ') || '-'
-  if (typeof value === 'boolean') return value ? 'Bəli' : 'Xeyr'
-  if (typeof value === 'string' && value.includes('T')) {
-    try {
-      const date = new Date(value)
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleDateString('az-AZ', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric'
-        })
-      }
-    } catch {
-      // Not a date
-    }
-  }
-  return String(value).substring(0, 30) + (String(value).length > 30 ? '...' : '')
 }
 
 export default TaskActivityTooltip

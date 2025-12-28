@@ -2,10 +2,15 @@ import { useState } from 'react'
 import {
   useGetActivityLogsQuery,
   useGetUsersQuery,
+  useGetTaskStatusesQuery,
 } from '../services/adminApi'
 
 const ACTIVITY_TYPES = [
   { value: '', label: 'Bütün əməliyyatlar' },
+  { value: 'space_create', label: 'Sahə yaradılması' },
+  { value: 'space_update', label: 'Sahə yenilənməsi' },
+  { value: 'space_delete', label: 'Sahə silinməsi' },
+  { value: 'space_restore', label: 'Sahə bərpası' },
   { value: 'folder_create', label: 'Qovluq yaradılması' },
   { value: 'folder_update', label: 'Qovluq yenilənməsi' },
   { value: 'folder_delete', label: 'Qovluq silinməsi' },
@@ -29,6 +34,7 @@ const getActivityTypeColor = (type) => {
 }
 
 const getActivityIcon = (type) => {
+  if (type?.includes('space')) return '🗂️'
   if (type?.includes('folder')) return '📁'
   if (type?.includes('list')) return '📋'
   if (type?.includes('task')) return '✅'
@@ -71,9 +77,60 @@ const ActivityLogs = () => {
 
   const { data, isLoading } = useGetActivityLogsQuery(filters)
   const { data: users = [] } = useGetUsersQuery()
+  const { data: statuses = [] } = useGetTaskStatusesQuery()
 
   const logs = data?.data || []
   const pagination = data?.meta || { total: 0, page: 1, limit: 20, totalPages: 1 }
+
+  // User ID-dən ada çevirmək üçün map yaradırıq
+  const userMap = {}
+  users.forEach(user => {
+    userMap[user.id] = user.name || user.username || user.email
+  })
+
+  // Status ID-dən ada çevirmək üçün map yaradırıq
+  const statusMap = {}
+  statuses.forEach(status => {
+    statusMap[status.id] = status.name
+  })
+
+  // Assignee ID-lərini adlara çevirən funksiya
+  const formatAssignees = (ids) => {
+    if (!Array.isArray(ids)) return String(ids)
+    if (ids.length === 0) return '-'
+    return ids.map(id => userMap[id] || `User #${id}`).join(', ')
+  }
+
+  // Key-ləri Azərbaycan dilinə çevirən funksiya
+  const getChangeLabel = (key) => {
+    const labels = {
+      title: 'Başlıq',
+      description: 'Açıqlama',
+      startAt: 'Başlama tarixi',
+      dueAt: 'Bitmə tarixi',
+      statusId: 'Status',
+      assignees: 'Təyin olunanlar',
+      taskListId: 'Siyahı',
+      is_message_send: 'Mesaj göndərildi',
+      link: 'Link',
+      name: 'Ad',
+      color: 'Rəng',
+    }
+    return labels[key] || key
+  }
+
+  // Dəyəri formatlamaq
+  const formatChangeValue = (value, key) => {
+    if (value === null || value === undefined) return '-'
+    if (key === 'assignees' && Array.isArray(value)) {
+      return formatAssignees(value)
+    }
+    if (key === 'statusId') {
+      return statusMap[value] || `Status #${value}`
+    }
+    if (typeof value === 'boolean') return value ? 'Bəli' : 'Xeyr'
+    return String(value)
+  }
 
   const handleFilterChange = (key, value) => {
     setFilters({ ...filters, [key]: value, page: 1 })
@@ -211,16 +268,16 @@ const ActivityLogs = () => {
                       <p className="font-medium text-gray-700 mb-1">Dəyişikliklər:</p>
                       <div className="space-y-1">
                         {Object.entries(log.changes).map(([key, value]) => (
-                          <div key={key} className="flex items-center gap-2">
-                            <span className="text-gray-500">{key}:</span>
+                          <div key={key} className="flex items-center gap-2 flex-wrap">
+                            <span className="text-gray-500">{getChangeLabel(key)}:</span>
                             {typeof value === 'object' && value.from !== undefined ? (
                               <>
-                                <span className="text-red-600 line-through">{String(value.from)}</span>
+                                <span className="text-red-600 line-through">{formatChangeValue(value.from, key)}</span>
                                 <span className="text-gray-400">→</span>
-                                <span className="text-green-600">{String(value.to)}</span>
+                                <span className="text-green-600">{formatChangeValue(value.to, key)}</span>
                               </>
                             ) : (
-                              <span className="text-gray-700">{JSON.stringify(value)}</span>
+                              <span className="text-gray-700">{formatChangeValue(value, key)}</span>
                             )}
                           </div>
                         ))}

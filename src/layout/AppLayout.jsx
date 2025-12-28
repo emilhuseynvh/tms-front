@@ -2,7 +2,9 @@ import { Outlet } from 'react-router'
 import { useState } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
+import FloatingChat from '../components/FloatingChat'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { useNotificationSocket } from '../hooks/useNotificationSocket.jsx'
 import { useGetRoomsQuery } from '../services/chatApi'
 import { useVerifyQuery } from '../services/authApi'
 
@@ -14,6 +16,7 @@ const AppLayout = () => {
   const { data: currentUser } = useVerifyQuery()
 
   useWebSocket(null, rooms, currentUser?.id) // Pass current user ID
+  useNotificationSocket(currentUser?.id) // Initialize notification socket
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -27,6 +30,9 @@ const AppLayout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Floating Chat */}
+      <FloatingChat />
     </div>
   )
 }

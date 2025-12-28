@@ -12,7 +12,7 @@ export const adminApi = createApi({
       return headers
     },
   }),
-  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash'],
+  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'TaskActivities', 'NotificationSettings'],
   endpoints: (builder) => ({
     // Space endpoints
     getSpaces: builder.query({
@@ -236,7 +236,11 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskData,
       }),
-      invalidatesTags: ['Tasks', 'ActivityLogs'],
+      invalidatesTags: (_result, _error, { id }) => [
+        'Tasks',
+        'ActivityLogs',
+        { type: 'TaskActivities', id }
+      ],
     }),
 
     // Delete task
@@ -261,6 +265,7 @@ export const adminApi = createApi({
     // Get task activities (for hover)
     getTaskActivities: builder.query({
       query: ({ taskId, limit = 10 }) => `/api/task/${taskId}/activities?limit=${limit}`,
+      providesTags: (_result, _error, { taskId }) => [{ type: 'TaskActivities', id: taskId }],
     }),
 
     // Task Status endpoints
@@ -380,6 +385,21 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ['Trash'],
     }),
+
+    // Notification Settings endpoints (admin only)
+    getNotificationSettings: builder.query({
+      query: () => '/api/notifications/settings',
+      providesTags: ['NotificationSettings'],
+    }),
+
+    updateNotificationSettings: builder.mutation({
+      query: (settingsData) => ({
+        url: '/api/notifications/settings',
+        method: 'PUT',
+        body: settingsData,
+      }),
+      invalidatesTags: ['NotificationSettings'],
+    }),
   }),
 })
 
@@ -435,4 +455,7 @@ export const {
   usePermanentDeleteFolderMutation,
   usePermanentDeleteListMutation,
   usePermanentDeleteTaskMutation,
+  // Notification Settings hooks
+  useGetNotificationSettingsQuery,
+  useUpdateNotificationSettingsMutation,
 } = adminApi

@@ -3,7 +3,6 @@ import AppLayout from "../layout/AppLayout";
 import Translation from "../pages/Translation";
 import Login from "../pages/Login";
 import Projects from "../pages/Projects";
-import Chat from "../pages/Chat";
 import Profile from "../pages/Profile";
 import Users from "../pages/Users";
 import Tasks from "../pages/Tasks";
@@ -12,6 +11,7 @@ import TaskDetail from "../pages/TaskDetail";
 import TaskStatuses from "../pages/TaskStatuses";
 import ActivityLogs from "../pages/ActivityLogs";
 import Trash from "../pages/Trash";
+import Settings from "../pages/Settings";
 import Protected from "./Protected";
 import AdminProtected from "./AdminProtected";
 
@@ -38,9 +38,9 @@ export const router = createBrowserRouter(
                 <Route path="/tasks/folder/:folderId" element={<TaskLists />} />
                 <Route path="/tasks/folder/:folderId/list/:taskListId" element={<TaskDetail />} />
                 <Route path="/projects" element={<Projects />} />
-                <Route path="/chat" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/translation" element={<Translation />} />
+                <Route path="/settings" element={<AdminProtected><Settings /></AdminProtected>} />
             </Route>
         </>
     )
