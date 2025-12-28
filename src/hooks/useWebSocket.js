@@ -160,6 +160,28 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
         }
 
         // Update rooms cache to show latest message
+        const isCurrentRoom = currentActiveRoomId === message.roomId
+        const isOwnMessage = String(message.senderId) === String(currentUserId)
+
+        console.log('Notification check:', {
+          isCurrentRoom,
+          isOwnMessage,
+          currentActiveRoomId: currentActiveRoomId,
+          messageRoomId: message.roomId,
+          messageSenderId: message.senderId,
+          currentUserId: currentUserId
+        })
+
+        // Show toast notification if message is from another user and not in current room
+        if (!isCurrentRoom && !isOwnMessage) {
+          const senderName = message.sender?.username || 'Bilinməyən'
+          toast.info(`${senderName}: ${message.content}`, {
+            position: 'top-right',
+            autoClose: 3000,
+            hideProgressBar: false,
+          })
+        }
+
         try {
           dispatch(
             chatApi.util.updateQueryData('getRooms', undefined, (draft) => {
@@ -169,37 +191,20 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
                   content: message.content,
                   createdAt: message.createdAt,
                 }
-                // Increment unread count if not current room
-                const isCurrentRoom = currentActiveRoomId === message.roomId
-                const isOwnMessage = String(message.senderId) === String(currentUserId)
-
-                console.log('Notification check:', {
-                  isCurrentRoom,
-                  isOwnMessage,
-                  currentActiveRoomId: currentActiveRoomId,
-                  messageRoomId: message.roomId,
-                  messageSenderId: message.senderId,
-                  currentUserId: currentUserId
-                })
-
+                // Increment unread count if not current room and not own message
                 if (!isCurrentRoom && !isOwnMessage) {
-                  // Only show notification if:
-                  // 1. Message is not in current active room
-                  // 2. Message is not from current user
                   room.unreadCount = (room.unreadCount || 0) + 1
-
-                  const senderName = message.sender?.username || 'Bilinməyən'
-                  toast.info(`${senderName}: ${message.content}`, {
-                    position: 'top-right',
-                    autoClose: 3000,
-                    hideProgressBar: false,
-                  })
+                  console.log('Incremented unread count for room:', message.roomId, 'new count:', room.unreadCount)
                 }
+              } else {
+                console.log('Room not found in cache, will refetch')
               }
             })
           )
         } catch (error) {
-          console.log('Rooms cache not initialized yet')
+          console.log('Rooms cache not initialized, invalidating to refetch')
+          // If cache doesn't exist, invalidate to trigger a refetch
+          dispatch(chatApi.util.invalidateTags(['Rooms']))
         }
       })
 
