@@ -308,14 +308,8 @@ const TaskDetail = () => {
   const formatRelativeTime = (dateString) => {
     if (!dateString) return '-'
 
-    // Server UTC-də saxlayır, timezone offset-i düzəldirik
-    let date = new Date(dateString)
-
-    // Əgər tarixdə timezone yoxdursa (Z və ya +00:00), UTC kimi qəbul et
-    if (!dateString.includes('Z') && !dateString.includes('+')) {
-      // Server vaxtını UTC kimi parse et
-      date = new Date(dateString + 'Z')
-    }
+    // Sadəcə Date parse et - backend timezone ilə göndərir
+    const date = new Date(dateString)
 
     const now = new Date()
     let diff = now.getTime() - date.getTime()
@@ -1672,7 +1666,18 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
     if (date) {
       const finalDate = new Date(date)
       finalDate.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
-      const formatted = finalDate.toISOString().slice(0, 16)
+      // Format as ISO string with timezone offset
+      const year = finalDate.getFullYear()
+      const month = String(finalDate.getMonth() + 1).padStart(2, '0')
+      const day = String(finalDate.getDate()).padStart(2, '0')
+      const hours = String(finalDate.getHours()).padStart(2, '0')
+      const minutes = String(finalDate.getMinutes()).padStart(2, '0')
+      // Get timezone offset in ±HH:MM format
+      const tzOffset = -finalDate.getTimezoneOffset()
+      const tzSign = tzOffset >= 0 ? '+' : '-'
+      const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0')
+      const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0')
+      const formatted = `${year}-${month}-${day}T${hours}:${minutes}:00${tzSign}${tzHours}:${tzMins}`
       onChange(formatted)
     }
     setIsOpen(false)
@@ -2087,7 +2092,18 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
     if (date) {
       const finalDate = new Date(date)
       finalDate.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
-      const formatted = finalDate.toISOString().slice(0, 16)
+      // Format as ISO string with timezone offset
+      const year = finalDate.getFullYear()
+      const month = String(finalDate.getMonth() + 1).padStart(2, '0')
+      const day = String(finalDate.getDate()).padStart(2, '0')
+      const hours = String(finalDate.getHours()).padStart(2, '0')
+      const minutes = String(finalDate.getMinutes()).padStart(2, '0')
+      // Get timezone offset in ±HH:MM format
+      const tzOffset = -finalDate.getTimezoneOffset()
+      const tzSign = tzOffset >= 0 ? '+' : '-'
+      const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0')
+      const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0')
+      const formatted = `${year}-${month}-${day}T${hours}:${minutes}:00${tzSign}${tzHours}:${tzMins}`
       onChange(formatted)
     }
     setIsOpen(false)

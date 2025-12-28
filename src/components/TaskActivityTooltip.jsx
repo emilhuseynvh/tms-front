@@ -5,11 +5,12 @@ import { useGetTaskActivitiesQuery, useGetUsersQuery, useGetTaskStatusesQuery } 
 const formatDate = (dateString) => {
   if (!dateString) return '-'
 
-  // Server UTC-də saxlayır, timezone offset-i düzəldirik
   let date = new Date(dateString)
 
-  // Əgər tarixdə timezone yoxdursa (Z və ya +00:00), UTC kimi qəbul et
-  if (!dateString.includes('Z') && !dateString.includes('+')) {
+  // Əgər tarixdə timezone məlumatı yoxdursa, UTC kimi qəbul et
+  // Timezone formatları: Z, +04:00, -05:00, +0400
+  const hasTimezone = /[Zz]|[+-]\d{2}:?\d{2}/.test(dateString)
+  if (!hasTimezone) {
     date = new Date(dateString + 'Z')
   }
 
@@ -168,11 +169,11 @@ const TaskActivityTooltip = ({ taskId, children }) => {
       try {
         const date = new Date(value)
         if (!isNaN(date.getTime())) {
-          return date.toLocaleDateString('az-AZ', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric'
-          })
+          const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
+          const day = date.getDate()
+          const month = months[date.getMonth()]
+          const year = date.getFullYear()
+          return `${day} ${month} ${year}`
         }
       } catch {
         // Not a date
