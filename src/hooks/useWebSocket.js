@@ -159,17 +159,17 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
           console.log('Messages cache not initialized for room:', message.roomId)
         }
 
-        // Update rooms cache to show latest message
+        // Check if message is from current user or in current active room
         const isCurrentRoom = currentActiveRoomId === message.roomId
         const isOwnMessage = String(message.senderId) === String(currentUserId)
 
         console.log('Notification check:', {
           isCurrentRoom,
           isOwnMessage,
-          currentActiveRoomId: currentActiveRoomId,
+          currentActiveRoomId,
           messageRoomId: message.roomId,
           messageSenderId: message.senderId,
-          currentUserId: currentUserId
+          currentUserId
         })
 
         // Show toast notification if message is from another user and not in current room
@@ -182,49 +182,16 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
           })
         }
 
-        try {
-          dispatch(
-            chatApi.util.updateQueryData('getRooms', undefined, (draft) => {
-              const room = draft.find(r => r.id === message.roomId)
-              if (room) {
-                room.lastMessage = {
-                  content: message.content,
-                  createdAt: message.createdAt,
-                }
-                // Increment unread count if not current room and not own message
-                if (!isCurrentRoom && !isOwnMessage) {
-                  room.unreadCount = (room.unreadCount || 0) + 1
-                  console.log('Incremented unread count for room:', message.roomId, 'new count:', room.unreadCount)
-                }
-              } else {
-                console.log('Room not found in cache, will refetch')
-              }
-            })
-          )
-        } catch (error) {
-          console.log('Rooms cache not initialized, invalidating to refetch')
-          // If cache doesn't exist, invalidate to trigger a refetch
-          dispatch(chatApi.util.invalidateTags(['Rooms']))
-        }
+        // Always refetch rooms from backend to get correct unreadCount
+        // This ensures unreadCount is always accurate from database
+        dispatch(chatApi.util.invalidateTags(['Rooms']))
       })
 
       // Listen for message read events
       globalSocket.on('message:read', (data) => {
         console.log('Message read:', data)
-
-        // Update rooms cache to reset unread count
-        try {
-          dispatch(
-            chatApi.util.updateQueryData('getRooms', undefined, (draft) => {
-              const room = draft.find(r => r.id === data.roomId)
-              if (room) {
-                room.unreadCount = 0
-              }
-            })
-          )
-        } catch (error) {
-          console.log('Rooms cache error:', error)
-        }
+        // Refetch rooms from backend to get correct unreadCount
+        dispatch(chatApi.util.invalidateTags(['Rooms']))
       })
 
       // Listen for user online status

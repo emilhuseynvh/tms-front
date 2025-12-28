@@ -114,28 +114,8 @@ export const chatApi = createApi({
         url: `/api/chat/rooms/${roomId}/read`,
         method: 'POST',
       }),
-      // Optimistic update - reset unread count immediately
-      async onQueryStarted(roomId, { dispatch, queryFulfilled }) {
-        const patchResult = dispatch(
-          chatApi.util.updateQueryData('getRooms', undefined, (draft) => {
-            const room = draft.find(r => r.id === roomId)
-            if (room) {
-              room.unreadCount = 0
-            }
-          })
-        )
-
-        try {
-          await queryFulfilled
-        } catch {
-          // Revert on error
-          patchResult.undo()
-        }
-      },
-      invalidatesTags: (_result, _error, roomId) => [
-        { type: 'Rooms', id: roomId },
-        'Rooms',
-      ],
+      // Invalidate rooms to refetch with correct unreadCount from backend
+      invalidatesTags: ['Rooms'],
     }),
   }),
 })
