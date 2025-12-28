@@ -5,6 +5,7 @@ import {
   useGetMessagesQuery,
   useMarkAsReadMutation,
   useCreateDirectChatMutation,
+  useSearchChatQuery,
   chatApi,
 } from '../services/chatApi'
 import { useVerifyQuery } from '../services/authApi'
@@ -74,6 +75,10 @@ const FloatingChat = () => {
   const { data: messages = [], isLoading: messagesLoading } = useGetMessagesQuery(
     selectedRoom?.id,
     { skip: !selectedRoom }
+  )
+  const { data: searchResults, isLoading: searchLoading } = useSearchChatQuery(
+    searchQuery,
+    { skip: !searchQuery || searchQuery.length < 2 || view === 'users' }
   )
   const dispatch = useDispatch()
   const [markAsRead] = useMarkAsReadMutation()
@@ -254,9 +259,40 @@ const FloatingChat = () => {
     )
   )
 
-  const filteredRooms = rooms.filter((room) =>
-    getRoomName(room).toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredRooms = searchQuery && searchQuery.length >= 2 && searchResults
+    ? rooms.filter((room) =>
+        getRoomName(room).toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : rooms.filter((room) =>
+        getRoomName(room).toLowerCase().includes(searchQuery.toLowerCase())
+      )
+
+  // Get search results users and messages
+  const searchedUsers = searchResults?.users || []
+  const searchedMessages = searchResults?.messages || []
+
+  const handleMessageClick = async (message) => {
+    try {
+      // Find the room and open it
+      const room = rooms.find(r => r.id === message.roomId) || message.room
+      if (room) {
+        setSelectedRoom(room)
+        setSearchQuery('')
+      }
+    } catch (error) {
+      toast.error('Xəta baş verdi')
+    }
+  }
+
+  const handleSearchedUserClick = async (userId) => {
+    try {
+      const result = await createDirectChat(Number(userId)).unwrap()
+      setSelectedRoom(result)
+      setSearchQuery('')
+    } catch (error) {
+      toast.error('Xəta baş verdi')
+    }
+  }
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp)
@@ -304,13 +340,18 @@ const FloatingChat = () => {
       {isOpen && (
         <div
           ref={panelRef}
-          className="fixed bottom-24 right-6 w-[380px] h-[520px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-4 duration-200"
+          className="fixed z-50 animate-in fade-in slide-in-from-bottom-4 duration-200
+            inset-0 sm:inset-auto
+            sm:bottom-24 sm:right-6
+            w-full sm:w-[380px]
+            h-full sm:h-[520px]
+            bg-white sm:rounded-2xl shadow-2xl border-0 sm:border border-gray-200 flex flex-col overflow-hidden"
         >
           {selectedRoom ? (
             // Chat View
             <>
               {/* Chat Header */}
-              <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white flex items-center gap-3">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white flex items-center gap-3 safe-area-top">
                 <button
                   onClick={() => setSelectedRoom(null)}
                   className="p-1 hover:bg-white/20 rounded-full transition-colors"
@@ -326,6 +367,15 @@ const FloatingChat = () => {
                     <p className="text-xs text-blue-100">{selectedRoom.memberCount || 0} üzv</p>
                   )}
                 </div>
+                {/* Close button for mobile */}
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="sm:hidden p-1 hover:bg-white/20 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
 
               {/* Messages */}
@@ -428,7 +478,7 @@ const FloatingChat = () => {
             // Rooms/Users List View
             <>
               {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+              <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-blue-600 text-white safe-area-top">
                 <div className="flex items-center justify-between mb-3">
                   {view === 'users' ? (
                     <>
@@ -441,10 +491,28 @@ const FloatingChat = () => {
                         </svg>
                       </button>
                       <h2 className="font-semibold">İstifadəçilər</h2>
-                      <div className="w-5"></div>
+                      <button
+                        onClick={() => setIsOpen(false)}
+                        className="sm:hidden p-1 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                      <div className="w-5 hidden sm:block"></div>
                     </>
                   ) : (
-                    <h2 className="font-semibold text-lg">Mesajlar</h2>
+                    <>
+                      <h2 className="font-semibold text-lg">Mesajlar</h2>
+                      <button
+                        onClick={() => setIsOpen(false)}
+                        className="sm:hidden p-1 hover:bg-white/20 rounded-full transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -467,7 +535,7 @@ const FloatingChat = () => {
 
                 <input
                   type="text"
-                  placeholder={view === 'users' ? 'İstifadəçi axtar...' : 'Chat axtar...'}
+                  placeholder={view === 'users' ? 'İstifadəçi axtar...' : 'İstifadəçi və ya mesaj axtar...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full px-3 py-2 text-sm text-gray-900 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white/50"
@@ -498,15 +566,115 @@ const FloatingChat = () => {
                       </div>
                     ))
                   )
+                ) : searchQuery && searchQuery.length >= 2 ? (
+                  // Search results view
+                  searchLoading ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">Axtarılır...</div>
+                  ) : (searchedUsers.length === 0 && searchedMessages.length === 0 && filteredRooms.length === 0) ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">Nəticə tapılmadı</div>
+                  ) : (
+                    <>
+                      {/* Matched Chats */}
+                      {filteredRooms.length > 0 && (
+                        <div>
+                          <div className="px-4 py-2 bg-gray-100 text-xs font-semibold text-gray-500 sticky top-0">
+                            Söhbətlər
+                          </div>
+                          {filteredRooms.map((room) => (
+                            <div
+                              key={room.id}
+                              onClick={() => { setSelectedRoom(room); setSearchQuery('') }}
+                              className="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="relative">
+                                  <Avatar src={getRoomAvatar(room)} name={getRoomName(room)} size="sm" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-sm text-gray-900 truncate">
+                                    {getRoomName(room)}
+                                  </h3>
+                                  <p className="text-xs text-gray-500 truncate mt-0.5">
+                                    {getLastMessage(room)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Searched Users */}
+                      {searchedUsers.length > 0 && (
+                        <div>
+                          <div className="px-4 py-2 bg-gray-100 text-xs font-semibold text-gray-500 sticky top-0">
+                            İstifadəçilər
+                          </div>
+                          {searchedUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              onClick={() => handleSearchedUserClick(user.id)}
+                              className="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <Avatar src={user?.avatar?.url} name={user.username} size="sm" />
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-medium text-sm text-gray-900 truncate">{user.username}</h3>
+                                  {user.email && <p className="text-xs text-gray-500 truncate">{user.email}</p>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Searched Messages */}
+                      {searchedMessages.length > 0 && (
+                        <div>
+                          <div className="px-4 py-2 bg-gray-100 text-xs font-semibold text-gray-500 sticky top-0">
+                            Mesajlar
+                          </div>
+                          {searchedMessages.map((message) => (
+                            <div
+                              key={message.id}
+                              onClick={() => handleMessageClick(message)}
+                              className="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
+                              <div className="flex items-start gap-3">
+                                <Avatar
+                                  src={message.room?.type === 'direct' ? message.room?.otherUser?.avatar?.url : null}
+                                  name={message.room?.name || 'Chat'}
+                                  size="sm"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h3 className="font-medium text-sm text-gray-900 truncate">
+                                      {message.room?.name || 'Chat'}
+                                    </h3>
+                                    <span className="text-[10px] text-gray-400 shrink-0">
+                                      {formatDate(message.createdAt)}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-600 mt-0.5">
+                                    <span className="text-gray-400">{message.sender?.username}: </span>
+                                    <span className="text-gray-800">{message.content}</span>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
                 ) : (
+                  // Normal rooms list
                   roomsLoading ? (
                     <div className="p-4 text-center text-gray-500 text-sm">Yüklənir...</div>
-                  ) : filteredRooms.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">
-                      {rooms.length === 0 ? 'Heç bir chat yoxdur' : 'Chat tapılmadı'}
-                    </div>
+                  ) : rooms.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-sm">Heç bir chat yoxdur</div>
                   ) : (
-                    filteredRooms.map((room) => (
+                    rooms.map((room) => (
                       <div
                         key={room.id}
                         onClick={() => setSelectedRoom(room)}

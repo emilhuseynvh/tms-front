@@ -117,6 +117,11 @@ export const chatApi = createApi({
       // Invalidate rooms to refetch with correct unreadCount from backend
       invalidatesTags: ['Rooms'],
     }),
+
+    // Search users and messages
+    searchChat: builder.query({
+      query: (query) => `/api/chat/search?q=${encodeURIComponent(query)}`,
+    }),
   }),
 })
 
@@ -129,4 +134,5 @@ export const {
   useGetMessagesQuery,
   useSendMessageMutation,
   useMarkAsReadMutation,
+  useSearchChatQuery,
 } = chatApi

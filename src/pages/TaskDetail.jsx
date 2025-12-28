@@ -30,10 +30,27 @@ const TaskDetail = () => {
   const [editingValue, setEditingValue] = useState('')
   const newTaskInputRef = useRef(null)
 
+  // Column resize state
+  const [columnWidths, setColumnWidths] = useState({
+    checkbox: 48,
+    title: 250,
+    description: 200,
+    status: 130,
+    assignee: 160,
+    updatedAt: 150,
+    startDate: 160,
+    endDate: 160,
+    link: 180,
+  })
+  const [resizing, setResizing] = useState(null) // { column, startX, startWidth }
+  const tableRef = useRef(null)
+
   // Filters
   const [search, setSearch] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
   const { data: tasks = [], isLoading } = useGetTasksByListQuery({
@@ -41,6 +58,8 @@ const TaskDetail = () => {
     search,
     startDate,
     endDate,
+    statusId: statusFilter,
+    assigneeId: assigneeFilter,
   })
   const { data: users = [] } = useGetUsersQuery()
   const { data: statuses = [] } = useGetTaskStatusesQuery()
@@ -53,7 +72,47 @@ const TaskDetail = () => {
     setSearch('')
     setStartDate('')
     setEndDate('')
+    setStatusFilter('')
+    setAssigneeFilter('')
   }
+
+  // Column resize handlers
+  const handleResizeStart = (e, column) => {
+    e.preventDefault()
+    setResizing({
+      column,
+      startX: e.clientX,
+      startWidth: columnWidths[column]
+    })
+  }
+
+  useEffect(() => {
+    if (!resizing) return
+
+    const handleMouseMove = (e) => {
+      const diff = e.clientX - resizing.startX
+      const newWidth = Math.max(50, resizing.startWidth + diff) // Minimum 50px
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizing.column]: newWidth
+      }))
+    }
+
+    const handleMouseUp = () => {
+      setResizing(null)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [resizing])
+
+  // Calculate total table width
+  const totalTableWidth = Object.values(columnWidths).reduce((sum, w) => sum + w, 0)
 
   const handleOpenModal = (task = null, parentId = null) => {
     setEditingTask(task)
@@ -339,7 +398,7 @@ const TaskDetail = () => {
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           }`}
         >
-          <td className="px-2 py-2">
+          <td style={{ width: columnWidths.checkbox }} className="px-2 py-2">
             <div className="flex items-center gap-1" style={{ paddingLeft: `${indent}px` }}>
               {hasChildren ? (
                 <button
@@ -367,7 +426,7 @@ const TaskDetail = () => {
               </svg>
             </div>
           </td>
-          <td className="px-2 py-2 min-w-[200px]">
+          <td style={{ width: columnWidths.title }} className="px-2 py-2">
             <div className="flex items-center gap-2">
               <div className="flex-1 min-w-0">
                 {isEditingTitle ? (
@@ -434,7 +493,7 @@ const TaskDetail = () => {
               </div>
             </div>
           </td>
-          <td className="px-2 py-2">
+          <td style={{ width: columnWidths.description }} className="px-2 py-2">
             {isEditingDescription ? (
               <textarea
                 autoFocus
@@ -463,7 +522,7 @@ const TaskDetail = () => {
               </div>
             )}
           </td>
-          <td className="px-2 py-2 whitespace-nowrap">
+          <td style={{ width: columnWidths.status }} className="px-2 py-2 whitespace-nowrap">
             <select
               value={task.statusId || ''}
               onChange={(e) => handleStatusChange(task.id, e.target.value)}
@@ -477,14 +536,14 @@ const TaskDetail = () => {
               ))}
             </select>
           </td>
-          <td className="px-2 py-2">
+          <td style={{ width: columnWidths.assignee }} className="px-2 py-2">
             <AssigneeSelector
               task={task}
               users={users}
               onUpdate={handleAssigneesChange}
             />
           </td>
-          <td className="px-2 py-2">
+          <td style={{ width: columnWidths.updatedAt }} className="px-2 py-2">
             <TaskActivityTooltip taskId={task.id}>
               <div className="flex items-center gap-1.5 cursor-pointer group">
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-blue-50 to-indigo-100 group-hover:from-blue-100 group-hover:to-indigo-200 transition-all duration-200 shadow-sm">
@@ -503,21 +562,21 @@ const TaskDetail = () => {
               </div>
             </TaskActivityTooltip>
           </td>
-          <td className="px-2 py-2 whitespace-nowrap">
+          <td style={{ width: columnWidths.startDate }} className="px-2 py-2 whitespace-nowrap">
             <InlineDatePicker
               value={task.startAt}
               onChange={(value) => handleDateChange(task.id, 'startAt', value)}
               placeholder="Başlama"
             />
           </td>
-          <td className="px-2 py-2 whitespace-nowrap">
+          <td style={{ width: columnWidths.endDate }} className="px-2 py-2 whitespace-nowrap">
             <InlineDatePicker
               value={task.dueAt}
               onChange={(value) => handleDateChange(task.id, 'dueAt', value)}
               placeholder="Bitmə"
             />
           </td>
-          <td className="px-2 py-2">
+          <td style={{ width: columnWidths.link }} className="px-2 py-2">
             {isEditingLink ? (
               <input
                 type="url"
@@ -735,7 +794,7 @@ const TaskDetail = () => {
                 </svg>
                 <span className="hidden sm:inline">Filtr</span>
               </button>
-              {(search || startDate || endDate) && (
+              {(search || startDate || endDate || statusFilter || assigneeFilter) && (
                 <button
                   onClick={handleClearFilters}
                   className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
@@ -751,7 +810,37 @@ const TaskDetail = () => {
 
           {/* Date Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-gray-200">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Hamısı</option>
+                  {statuses.map(status => (
+                    <option key={status.id} value={status.id}>{status.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Təyin edilmiş
+                </label>
+                <select
+                  value={assigneeFilter}
+                  onChange={(e) => setAssigneeFilter(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Hamısı</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>{user.name || user.username}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Başlama tarixi
@@ -781,7 +870,7 @@ const TaskDetail = () => {
         <div className="flex items-center justify-between px-1">
           <p className="text-sm text-gray-600">
             {tasks.length} tapşırıq
-            {(search || startDate || endDate) && (
+            {(search || startDate || endDate || statusFilter || assigneeFilter) && (
               <span className="text-blue-600 ml-1">(filtrlənmiş)</span>
             )}
           </p>
@@ -796,19 +885,84 @@ const TaskDetail = () => {
       ) : (
         <>
           {/* Desktop Table View */}
-          <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto overflow-y-visible">
-            <table className="w-full table-fixed" style={{ minWidth: '1450px' }}>
+          <div className={`hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto overflow-y-visible ${resizing ? 'select-none' : ''}`}>
+            <table ref={tableRef} className="table-fixed" style={{ minWidth: `${totalTableWidth}px` }}>
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-12"></th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[250px]">Başlıq</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[200px]">Açıqlama</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[130px]">Status</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[160px]">Təyin edilib</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[150px]">Son yenilənmə</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[160px]">Başlama</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[160px]">Bitmə</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-[180px]">Link</th>
+                  <th style={{ width: columnWidths.checkbox }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'checkbox')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.title }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Başlıq
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'title')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.description }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Açıqlama
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'description')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.status }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Status
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'status')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.assignee }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Təyin edilib
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'assignee')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.updatedAt }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Son yenilənmə
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'updatedAt')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.startDate }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Başlama
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'startDate')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.endDate }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    Bitmə
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
+                      onMouseDown={(e) => handleResizeStart(e, 'endDate')}
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
+                    </div>
+                  </th>
+                  <th style={{ width: columnWidths.link }} className="px-2 py-2 text-left text-xs font-medium text-gray-500">
+                    Link
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1334,20 +1488,23 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
     }
   }, [value])
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+
   useEffect(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect()
-      const dropdownWidth = 520
-      const dropdownHeight = 420
+      const isMobileView = window.innerWidth < 640
+      const dropdownWidth = isMobileView ? window.innerWidth - 32 : 520
+      const dropdownHeight = isMobileView ? 500 : 420
 
       let top = rect.bottom + 4
-      let left = rect.left
+      let left = isMobileView ? 16 : rect.left
 
       if (top + dropdownHeight > window.innerHeight) {
-        top = rect.top - dropdownHeight - 4
+        top = Math.max(16, rect.top - dropdownHeight - 4)
       }
 
-      if (left + dropdownWidth > window.innerWidth) {
+      if (!isMobileView && left + dropdownWidth > window.innerWidth) {
         left = window.innerWidth - dropdownWidth - 16
       }
 
@@ -1355,7 +1512,7 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
         left = 16
       }
 
-      setPosition({ top, left })
+      setPosition({ top, left, width: dropdownWidth })
     }
   }, [isOpen])
 
@@ -1469,6 +1626,14 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
     )
   }
 
+  const isPastDate = (date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const checkDate = new Date(date)
+    checkDate.setHours(0, 0, 0, 0)
+    return checkDate < today
+  }
+
   const isSelected = (date) => {
     if (!selectedDate) return false
     return (
@@ -1494,6 +1659,7 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
   }
 
   const handleDayClick = (dayInfo) => {
+    if (isPastDate(dayInfo.date)) return
     const date = new Date(dayInfo.date)
     date.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
     setSelectedDate(date)
@@ -1573,26 +1739,28 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
-          style={{ top: position.top, left: position.left, width: '520px' }}
+          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] overflow-y-auto"
+          style={{ top: position.top, left: position.left, width: position.width || 520 }}
         >
-          <div className="flex">
-            <div className="w-[200px] border-r border-gray-100 py-2 bg-gray-50/50">
-              {quickOptions.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuickSelect(option)}
-                  className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white transition-colors whitespace-nowrap"
-                >
-                  <span className="text-gray-700">{option.label}</span>
-                  <span className="text-gray-400 text-xs ml-3">{option.shortDate}</span>
-                </button>
-              ))}
+          <div className="flex flex-col sm:flex-row">
+            <div className="w-full sm:w-[200px] border-b sm:border-b-0 sm:border-r border-gray-100 py-2 bg-gray-50/50">
+              <div className="flex flex-wrap sm:flex-col gap-1 px-2 sm:px-0">
+                {quickOptions.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleQuickSelect(option)}
+                    className="flex-1 sm:flex-none sm:w-full flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm hover:bg-white transition-colors whitespace-nowrap rounded sm:rounded-none"
+                  >
+                    <span className="text-gray-700">{option.label}</span>
+                    <span className="text-gray-400 text-[10px] sm:text-xs ml-2 sm:ml-3 hidden sm:inline">{option.shortDate}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex-1 p-4">
+            <div className="flex-1 p-3 sm:p-4">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-xs sm:text-sm font-semibold text-gray-800">
                   {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                 </span>
                 <div className="flex items-center gap-1">
@@ -1601,7 +1769,7 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
                       const today = new Date()
                       setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))
                     }}
-                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                    className="px-2 py-1 text-[10px] sm:text-xs text-blue-600 hover:bg-blue-50 rounded"
                   >
                     Bugün
                   </button>
@@ -1626,34 +1794,40 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
 
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {dayNames.map((day, index) => (
-                  <div key={index} className="text-center text-xs font-medium text-gray-400 py-1">
+                  <div key={index} className="text-center text-[10px] sm:text-xs font-medium text-gray-400 py-1">
                     {day}
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1">
-                {calendarDays.map((dayInfo, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleDayClick(dayInfo)}
-                    className={`
-                      w-9 h-9 text-sm rounded-full flex items-center justify-center transition-all
-                      ${!dayInfo.isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
-                      ${isToday(dayInfo.date) && !isSelected(dayInfo.date) ? 'bg-red-100 text-red-600 font-medium' : ''}
-                      ${isSelected(dayInfo.date) ? 'bg-blue-500 text-white font-medium' : ''}
-                      ${dayInfo.isCurrentMonth && !isSelected(dayInfo.date) && !isToday(dayInfo.date) ? 'hover:bg-gray-100' : ''}
-                    `}
-                  >
-                    {dayInfo.day}
-                  </button>
-                ))}
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+                {calendarDays.map((dayInfo, index) => {
+                  const isPast = isPastDate(dayInfo.date)
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handleDayClick(dayInfo)}
+                      disabled={isPast}
+                      className={`
+                        w-8 h-8 sm:w-9 sm:h-9 text-xs sm:text-sm rounded-full flex items-center justify-center transition-all
+                        ${isPast ? 'text-gray-300 cursor-not-allowed' : ''}
+                        ${!dayInfo.isCurrentMonth && !isPast ? 'text-gray-300' : ''}
+                        ${dayInfo.isCurrentMonth && !isPast ? 'text-gray-700' : ''}
+                        ${isToday(dayInfo.date) && !isSelected(dayInfo.date) ? 'bg-red-100 text-red-600 font-medium' : ''}
+                        ${isSelected(dayInfo.date) ? 'bg-blue-500 text-white font-medium' : ''}
+                        ${dayInfo.isCurrentMonth && !isSelected(dayInfo.date) && !isToday(dayInfo.date) && !isPast ? 'hover:bg-gray-100' : ''}
+                      `}
+                    >
+                      {dayInfo.day}
+                    </button>
+                  )
+                })}
               </div>
 
               {selectedDate && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-gray-500">
+                    <span className="text-[10px] sm:text-xs text-gray-500">
                       {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
                     </span>
                     <div className="flex items-center gap-1">
@@ -1733,17 +1907,18 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
   useEffect(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect()
-      const dropdownWidth = 520
-      const dropdownHeight = 420
+      const isMobileView = window.innerWidth < 640
+      const dropdownWidth = isMobileView ? window.innerWidth - 32 : 520
+      const dropdownHeight = isMobileView ? 500 : 420
 
       let top = rect.bottom + 4
-      let left = rect.left
+      let left = isMobileView ? 16 : rect.left
 
       if (top + dropdownHeight > window.innerHeight) {
-        top = rect.top - dropdownHeight - 4
+        top = Math.max(16, rect.top - dropdownHeight - 4)
       }
 
-      if (left + dropdownWidth > window.innerWidth) {
+      if (!isMobileView && left + dropdownWidth > window.innerWidth) {
         left = window.innerWidth - dropdownWidth - 16
       }
 
@@ -1751,7 +1926,7 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
         left = 16
       }
 
-      setPosition({ top, left })
+      setPosition({ top, left, width: dropdownWidth })
     }
   }, [isOpen])
 
@@ -1866,6 +2041,14 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
     )
   }
 
+  const isPastDate = (date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const checkDate = new Date(date)
+    checkDate.setHours(0, 0, 0, 0)
+    return checkDate < today
+  }
+
   const isSelected = (date) => {
     if (!selectedDate) return false
     return (
@@ -1891,6 +2074,7 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
   }
 
   const handleDayClick = (dayInfo) => {
+    if (isPastDate(dayInfo.date)) return
     const date = new Date(dayInfo.date)
     date.setHours(parseInt(selectedTime.hours), parseInt(selectedTime.minutes), 0, 0)
     setSelectedDate(date)
@@ -1955,29 +2139,31 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
-          style={{ top: position.top, left: position.left, width: '520px' }}
+          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] overflow-y-auto"
+          style={{ top: position.top, left: position.left, width: position.width || 520 }}
         >
-          <div className="flex">
+          <div className="flex flex-col sm:flex-row">
             {/* Left - Quick options */}
-            <div className="w-[200px] border-r border-gray-100 py-2 bg-gray-50/50">
-              {quickOptions.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuickSelect(option)}
-                  className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white transition-colors whitespace-nowrap"
-                >
-                  <span className="text-gray-700">{option.label}</span>
-                  <span className="text-gray-400 text-xs ml-3">{option.shortDate}</span>
-                </button>
-              ))}
+            <div className="w-full sm:w-[200px] border-b sm:border-b-0 sm:border-r border-gray-100 py-2 bg-gray-50/50">
+              <div className="flex flex-wrap sm:flex-col gap-1 px-2 sm:px-0">
+                {quickOptions.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleQuickSelect(option)}
+                    className="flex-1 sm:flex-none sm:w-full flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm hover:bg-white transition-colors whitespace-nowrap rounded sm:rounded-none"
+                  >
+                    <span className="text-gray-700">{option.label}</span>
+                    <span className="text-gray-400 text-[10px] sm:text-xs ml-2 sm:ml-3 hidden sm:inline">{option.shortDate}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Right - Calendar */}
-            <div className="flex-1 p-4">
+            <div className="flex-1 p-3 sm:p-4">
               {/* Month navigation */}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-xs sm:text-sm font-semibold text-gray-800">
                   {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                 </span>
                 <div className="flex items-center gap-1">
@@ -1986,7 +2172,7 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
                       const today = new Date()
                       setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))
                     }}
-                    className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                    className="px-2 py-1 text-[10px] sm:text-xs text-blue-600 hover:bg-blue-50 rounded"
                   >
                     Bugün
                   </button>
@@ -2012,36 +2198,42 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
               {/* Day names */}
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {dayNames.map((day, index) => (
-                  <div key={index} className="text-center text-xs font-medium text-gray-400 py-1">
+                  <div key={index} className="text-center text-[10px] sm:text-xs font-medium text-gray-400 py-1">
                     {day}
                   </div>
                 ))}
               </div>
 
               {/* Calendar days */}
-              <div className="grid grid-cols-7 gap-1">
-                {calendarDays.map((dayInfo, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleDayClick(dayInfo)}
-                    className={`
-                      w-9 h-9 text-sm rounded-full flex items-center justify-center transition-all
-                      ${!dayInfo.isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
-                      ${isToday(dayInfo.date) && !isSelected(dayInfo.date) ? 'bg-red-100 text-red-600 font-medium' : ''}
-                      ${isSelected(dayInfo.date) ? 'bg-blue-500 text-white font-medium' : ''}
-                      ${dayInfo.isCurrentMonth && !isSelected(dayInfo.date) && !isToday(dayInfo.date) ? 'hover:bg-gray-100' : ''}
-                    `}
-                  >
-                    {dayInfo.day}
-                  </button>
-                ))}
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+                {calendarDays.map((dayInfo, index) => {
+                  const isPast = isPastDate(dayInfo.date)
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handleDayClick(dayInfo)}
+                      disabled={isPast}
+                      className={`
+                        w-8 h-8 sm:w-9 sm:h-9 text-xs sm:text-sm rounded-full flex items-center justify-center transition-all
+                        ${isPast ? 'text-gray-300 cursor-not-allowed' : ''}
+                        ${!dayInfo.isCurrentMonth && !isPast ? 'text-gray-300' : ''}
+                        ${dayInfo.isCurrentMonth && !isPast ? 'text-gray-700' : ''}
+                        ${isToday(dayInfo.date) && !isSelected(dayInfo.date) ? 'bg-red-100 text-red-600 font-medium' : ''}
+                        ${isSelected(dayInfo.date) ? 'bg-blue-500 text-white font-medium' : ''}
+                        ${dayInfo.isCurrentMonth && !isSelected(dayInfo.date) && !isToday(dayInfo.date) && !isPast ? 'hover:bg-gray-100' : ''}
+                      `}
+                    >
+                      {dayInfo.day}
+                    </button>
+                  )
+                })}
               </div>
 
               {/* Time & Actions */}
               {selectedDate && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-gray-500">
+                    <span className="text-[10px] sm:text-xs text-gray-500">
                       {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
                     </span>
                     <div className="flex items-center gap-1">

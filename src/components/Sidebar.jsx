@@ -619,6 +619,7 @@ const SpaceItem = ({
         updateFolder={updateFolder}
         isCreating={isCreatingFolder}
         isUpdating={isUpdatingFolder}
+        onNavigate={onNavigate}
       />
 
       {/* Direct List Form Modal */}
@@ -964,6 +965,7 @@ const FolderFormModal = ({
   updateFolder,
   isCreating,
   isUpdating,
+  onNavigate,
 }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -999,9 +1001,19 @@ const FolderFormModal = ({
         await updateFolder({ id: folder.id, ...formData }).unwrap()
         toast.success('Qovluq yeniləndi!')
       } else {
-        // Create
-        await createFolder({ ...formData, spaceId }).unwrap()
+        // Create - navigate to default list after creation
+        const newFolder = await createFolder({ ...formData, spaceId }).unwrap()
+        console.log('New folder created:', newFolder)
         toast.success('Qovluq yaradıldı!')
+
+        // Navigate to default list if available
+        if (onNavigate && newFolder?.defaultListId) {
+          const url = `/tasks/space/${spaceId}/folder/${newFolder.id}/list/${newFolder.defaultListId}`
+          console.log('Navigating to:', url)
+          onNavigate(url)
+        } else {
+          console.log('onNavigate:', onNavigate, 'defaultListId:', newFolder?.defaultListId)
+        }
       }
       onClose()
     } catch (error) {

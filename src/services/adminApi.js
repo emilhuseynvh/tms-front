@@ -207,11 +207,13 @@ export const adminApi = createApi({
 
     // Get tasks by task list
     getTasksByList: builder.query({
-      query: ({ taskListId, search, startDate, endDate }) => {
+      query: ({ taskListId, search, startDate, endDate, statusId, assigneeId }) => {
         const params = new URLSearchParams()
         if (search) params.append('search', search)
         if (startDate) params.append('startDate', startDate)
         if (endDate) params.append('endDate', endDate)
+        if (statusId) params.append('statusId', statusId)
+        if (assigneeId) params.append('assigneeId', assigneeId)
 
         const queryString = params.toString()
         return `/api/task/list/${taskListId}${queryString ? `?${queryString}` : ''}`

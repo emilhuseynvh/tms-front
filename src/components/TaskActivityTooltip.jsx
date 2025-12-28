@@ -76,8 +76,23 @@ const getChangeIcon = (key) => {
 
 const TaskActivityTooltip = ({ taskId, children }) => {
   const [isHovering, setIsHovering] = useState(false)
-  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 })
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0, showAbove: false })
   const containerRef = useRef(null)
+  const hideTimeoutRef = useRef(null)
+
+  const handleMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current)
+      hideTimeoutRef.current = null
+    }
+    setIsHovering(true)
+  }
+
+  const handleMouseLeave = () => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsHovering(false)
+    }, 150) // Kiçik gecikmə ilə hover-i bağla
+  }
 
   const { data: activities = [], isLoading } = useGetTaskActivitiesQuery(
     { taskId, limit: 10 },
@@ -174,8 +189,8 @@ const TaskActivityTooltip = ({ taskId, children }) => {
         left: tooltipPosition.left,
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05)'
       }}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Header */}
       <div className="px-4 py-3 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
@@ -302,8 +317,8 @@ const TaskActivityTooltip = ({ taskId, children }) => {
     <div
       ref={containerRef}
       className="relative inline-block"
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {children}
       {tooltipContent}
