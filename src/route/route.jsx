@@ -11,6 +11,7 @@ import TaskDetail from "../pages/TaskDetail";
 import TaskStatuses from "../pages/TaskStatuses";
 import ActivityLogs from "../pages/ActivityLogs";
 import Trash from "../pages/Trash";
+import Archive from "../pages/Archive";
 import Settings from "../pages/Settings";
 import Protected from "./Protected";
 import AdminProtected from "./AdminProtected";
@@ -28,6 +29,7 @@ export const router = createBrowserRouter(
                 <Route path="/statuses" element={<AdminProtected><TaskStatuses /></AdminProtected>} />
                 <Route path="/activity-logs" element={<ActivityLogs />} />
                 <Route path="/trash" element={<Trash />} />
+                <Route path="/archive" element={<Archive />} />
                 <Route path="/tasks" element={<Tasks />} />
                 {/* Space routes */}
                 <Route path="/tasks/space/:spaceId" element={<TaskLists />} />

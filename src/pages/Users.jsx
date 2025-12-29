@@ -6,9 +6,11 @@ import {
   useDeleteUserMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
+import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
 
 const Users = () => {
+  const { confirm } = useConfirm()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -44,7 +46,15 @@ const Users = () => {
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bu istifadəçini silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'İstifadəçini sil',
+      message: 'Bu istifadəçini silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteUser(id).unwrap()
         toast.success('İstifadəçi silindi!')

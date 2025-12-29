@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, useLocation } from 'react-router'
 import { toast } from 'react-toastify'
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import {
   useGetMySpacesQuery,
   useCreateSpaceMutation,
@@ -14,16 +14,21 @@ import {
   useGetTaskListsBySpaceQuery,
   useCreateTaskListMutation,
   useUpdateTaskListMutation,
-  useDeleteTaskListMutation
+  useDeleteTaskListMutation,
+  useArchiveSpaceMutation,
+  useArchiveFolderMutation,
+  useArchiveListMutation
 } from '../services/adminApi'
 import { useVerifyQuery } from '../services/authApi'
 import Modal from './Modal'
+import { useConfirm } from '../context/ConfirmContext'
 import { disconnectSocket } from '../hooks/useWebSocket'
 import { disconnectNotificationSocket } from '../hooks/useNotificationSocket.jsx'
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { confirm } = useConfirm()
   const [isTasksOpen, setIsTasksOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSpaceModalOpen, setIsSpaceModalOpen] = useState(false)
@@ -77,7 +82,15 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const handleDeleteSpace = async (e, id) => {
     e.stopPropagation()
-    if (window.confirm('Bu sahəni silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'Sahəni sil',
+      message: 'Bu sahəni silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteSpace(id).unwrap()
         toast.success('Sahə silindi!')
@@ -135,6 +148,15 @@ const Sidebar = ({ isOpen, onClose }) => {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      ),
+    },
+    {
+      path: '/archive',
+      label: 'Arxiv',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
         </svg>
       ),
     },
@@ -270,13 +292,13 @@ const Sidebar = ({ isOpen, onClose }) => {
                         onExpand={expandSpace}
                         isHovered={hoveredSpace === space.id}
                         onHover={setHoveredSpace}
-                        onEdit={handleOpenSpaceModal}
                         onDelete={handleDeleteSpace}
                         onNavigate={(path) => {
                           navigate(path)
                           onClose()
                         }}
                         location={location}
+                        onUpdateSpace={updateSpace}
                       />
                     ))
                   )}
@@ -327,10 +349,10 @@ const SpaceItem = ({
   onExpand,
   isHovered,
   onHover,
-  onEdit,
   onDelete,
   onNavigate,
   location,
+  onUpdateSpace,
 }) => {
   const { data: folders = [], isLoading: isFoldersLoading } = useGetFoldersBySpaceQuery(
     space.id,
@@ -346,6 +368,14 @@ const SpaceItem = ({
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
   const [updateTaskList, { isLoading: isUpdatingList }] = useUpdateTaskListMutation()
   const [deleteTaskList] = useDeleteTaskListMutation()
+  const [archiveSpace] = useArchiveSpaceMutation()
+  const [archiveFolder] = useArchiveFolderMutation()
+  const [archiveList] = useArchiveListMutation()
+
+  // Inline edit states
+  const [isEditingSpace, setIsEditingSpace] = useState(false)
+  const [editSpaceName, setEditSpaceName] = useState(space.name)
+  const spaceInputRef = useRef(null)
 
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState(null)
@@ -356,8 +386,83 @@ const SpaceItem = ({
   const [hoveredList, setHoveredList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
 
+  // List inline edit states
+  const [editingListId, setEditingListId] = useState(null)
+  const [editListName, setEditListName] = useState('')
+  const listInputRef = useRef(null)
+
   const isActive = location.pathname.startsWith(`/tasks/space/${space.id}`)
   const isLoading = isFoldersLoading || isDirectListsLoading
+
+  // Space inline edit
+  useEffect(() => {
+    if (isEditingSpace && spaceInputRef.current) {
+      spaceInputRef.current.focus()
+      spaceInputRef.current.select()
+    }
+  }, [isEditingSpace])
+
+  const handleSpaceNameClick = (e) => {
+    e.stopPropagation()
+    setIsEditingSpace(true)
+    setEditSpaceName(space.name)
+  }
+
+  const handleSpaceNameSave = async () => {
+    if (editSpaceName.trim() && editSpaceName !== space.name) {
+      try {
+        await onUpdateSpace({ id: space.id, name: editSpaceName.trim() }).unwrap()
+        toast.success('Sahə adı yeniləndi!')
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+        setEditSpaceName(space.name)
+      }
+    }
+    setIsEditingSpace(false)
+  }
+
+  const handleSpaceNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSpaceNameSave()
+    } else if (e.key === 'Escape') {
+      setEditSpaceName(space.name)
+      setIsEditingSpace(false)
+    }
+  }
+
+  // List inline edit
+  useEffect(() => {
+    if (editingListId && listInputRef.current) {
+      listInputRef.current.focus()
+      listInputRef.current.select()
+    }
+  }, [editingListId])
+
+  const handleListNameClick = (e, list) => {
+    e.stopPropagation()
+    setEditingListId(list.id)
+    setEditListName(list.name)
+  }
+
+  const handleListNameSave = async (listId) => {
+    if (editListName.trim() && editListName !== directLists.find(l => l.id === listId)?.name) {
+      try {
+        await updateTaskList({ id: listId, name: editListName.trim() }).unwrap()
+        toast.success('Siyahı adı yeniləndi!')
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+      }
+    }
+    setEditingListId(null)
+  }
+
+  const handleListNameKeyDown = (e, listId) => {
+    if (e.key === 'Enter') {
+      handleListNameSave(listId)
+    } else if (e.key === 'Escape') {
+      setEditingListId(null)
+    }
+  }
 
   const toggleFolder = (folderId, e) => {
     e?.stopPropagation()
@@ -380,7 +485,15 @@ const SpaceItem = ({
 
   const handleDeleteFolder = async (e, id) => {
     e.stopPropagation()
-    if (window.confirm('Bu qovluğu silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'Qovluğu sil',
+      message: 'Bu qovluğu silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteFolder(id).unwrap()
         toast.success('Qovluq silindi!')
@@ -402,13 +515,51 @@ const SpaceItem = ({
 
   const handleDeleteList = async (e, id) => {
     e.stopPropagation()
-    if (window.confirm('Bu siyahını silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'Siyahını sil',
+      message: 'Bu siyahını silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteTaskList(id).unwrap()
         toast.success('Siyahı silindi!')
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }
+    }
+  }
+
+  const handleArchiveSpace = async (e) => {
+    e.stopPropagation()
+    try {
+      await archiveSpace(space.id).unwrap()
+      toast.success('Sahə arxivləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleArchiveFolder = async (e, id) => {
+    e.stopPropagation()
+    try {
+      await archiveFolder(id).unwrap()
+      toast.success('Qovluq arxivləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleArchiveList = async (e, id) => {
+    e.stopPropagation()
+    try {
+      await archiveList(id).unwrap()
+      toast.success('Siyahı arxivləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
     }
   }
 
@@ -441,32 +592,50 @@ const SpaceItem = ({
         </button>
 
         {/* Space adı */}
-        <button
-          onClick={() => {
-            onExpand(space.id)
-            onNavigate(`/tasks/space/${space.id}`)
-          }}
-          className="flex items-center gap-2 flex-1 min-w-0"
-        >
-          <svg className="w-4 h-4 shrink-0 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <svg
+            className="w-4 h-4 shrink-0 text-purple-600 cursor-pointer"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            onClick={() => {
+              onExpand(space.id)
+              onNavigate(`/tasks/space/${space.id}`)
+            }}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          <span className="truncate">{space.name}</span>
-        </button>
+          {isEditingSpace ? (
+            <input
+              ref={spaceInputRef}
+              type="text"
+              value={editSpaceName}
+              onChange={(e) => setEditSpaceName(e.target.value)}
+              onBlur={handleSpaceNameSave}
+              onKeyDown={handleSpaceNameKeyDown}
+              className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              className="truncate cursor-pointer hover:text-blue-600"
+              onClick={handleSpaceNameClick}
+              title="Adı dəyişmək üçün klikləyin"
+            >
+              {space.name}
+            </span>
+          )}
+        </div>
 
-        {/* Edit/Delete buttonları */}
-        {isHovered && (
+        {isHovered && !isEditingSpace && (
           <div className="flex gap-0.5 shrink-0">
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(space)
-              }}
-              className="p-1 hover:bg-blue-300 rounded transition-colors"
-              title="Redaktə et"
+              onClick={handleArchiveSpace}
+              className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
+              title="Arxivlə"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
               </svg>
             </button>
             <button
@@ -507,10 +676,11 @@ const SpaceItem = ({
                   onToggle={toggleFolder}
                   isHovered={hoveredFolder === folder.id}
                   onHover={setHoveredFolder}
-                  onEdit={handleOpenFolderModal}
                   onDelete={handleDeleteFolder}
+                  onArchive={handleArchiveFolder}
                   onNavigate={onNavigate}
                   location={location}
+                  onUpdateFolder={updateFolder}
                 />
               ))}
 
@@ -529,27 +699,46 @@ const SpaceItem = ({
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                     }`}
                   >
-                    <button
-                      onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
-                      className="flex items-center gap-2 flex-1 min-w-0"
-                    >
-                      <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <svg
+                        className="w-4 h-4 shrink-0 text-gray-400 cursor-pointer"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
-                      <span className="truncate">{list.name}</span>
-                    </button>
-                    {hoveredList === list.id && (
+                      {editingListId === list.id ? (
+                        <input
+                          ref={listInputRef}
+                          type="text"
+                          value={editListName}
+                          onChange={(e) => setEditListName(e.target.value)}
+                          onBlur={() => handleListNameSave(list.id)}
+                          onKeyDown={(e) => handleListNameKeyDown(e, list.id)}
+                          className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span
+                          className="truncate cursor-pointer hover:text-blue-600"
+                          onClick={(e) => handleListNameClick(e, list)}
+                          title="Adı dəyişmək üçün klikləyin"
+                        >
+                          {list.name}
+                        </span>
+                      )}
+                    </div>
+                    {hoveredList === list.id && editingListId !== list.id && (
                       <div className="flex gap-0.5 shrink-0">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenListModal(list)
-                          }}
-                          className="p-1 hover:bg-blue-200 rounded transition-colors"
-                          title="Redaktə et"
+                          onClick={(e) => handleArchiveList(e, list.id)}
+                          className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
+                          title="Arxivlə"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                           </svg>
                         </button>
                         <button
@@ -645,10 +834,11 @@ const FolderItem = ({
   onToggle,
   isHovered,
   onHover,
-  onEdit,
   onDelete,
+  onArchive,
   onNavigate,
   location,
+  onUpdateFolder,
 }) => {
   const { data: taskLists = [], isLoading } = useGetTaskListsByFolderQuery(
     { folderId: folder.id },
@@ -657,12 +847,94 @@ const FolderItem = ({
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
   const [updateTaskList, { isLoading: isUpdatingList }] = useUpdateTaskListMutation()
   const [deleteTaskList] = useDeleteTaskListMutation()
+  const [archiveList] = useArchiveListMutation()
 
   const [isListModalOpen, setIsListModalOpen] = useState(false)
   const [editingList, setEditingList] = useState(null)
   const [hoveredList, setHoveredList] = useState(null)
 
+  // Inline edit states
+  const [isEditingFolder, setIsEditingFolder] = useState(false)
+  const [editFolderName, setEditFolderName] = useState(folder.name)
+  const folderInputRef = useRef(null)
+
+  // List inline edit states
+  const [editingListId, setEditingListId] = useState(null)
+  const [editListName, setEditListName] = useState('')
+  const listInputRef = useRef(null)
+
   const isActive = location.pathname.includes(`/folder/${folder.id}`)
+
+  // Folder inline edit
+  useEffect(() => {
+    if (isEditingFolder && folderInputRef.current) {
+      folderInputRef.current.focus()
+      folderInputRef.current.select()
+    }
+  }, [isEditingFolder])
+
+  // List inline edit
+  useEffect(() => {
+    if (editingListId && listInputRef.current) {
+      listInputRef.current.focus()
+      listInputRef.current.select()
+    }
+  }, [editingListId])
+
+  const handleFolderNameClick = (e) => {
+    e.stopPropagation()
+    setIsEditingFolder(true)
+    setEditFolderName(folder.name)
+  }
+
+  const handleFolderNameSave = async () => {
+    if (editFolderName.trim() && editFolderName !== folder.name) {
+      try {
+        await onUpdateFolder({ id: folder.id, name: editFolderName.trim() }).unwrap()
+        toast.success('Qovluq adı yeniləndi!')
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+        setEditFolderName(folder.name)
+      }
+    }
+    setIsEditingFolder(false)
+  }
+
+  const handleFolderNameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleFolderNameSave()
+    } else if (e.key === 'Escape') {
+      setEditFolderName(folder.name)
+      setIsEditingFolder(false)
+    }
+  }
+
+  // List inline edit functions
+  const handleListNameClick = (e, list) => {
+    e.stopPropagation()
+    setEditingListId(list.id)
+    setEditListName(list.name)
+  }
+
+  const handleListNameSave = async (listId) => {
+    if (editListName.trim() && editListName !== taskLists.find(l => l.id === listId)?.name) {
+      try {
+        await updateTaskList({ id: listId, name: editListName.trim() }).unwrap()
+        toast.success('Siyahı adı yeniləndi!')
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+      }
+    }
+    setEditingListId(null)
+  }
+
+  const handleListNameKeyDown = (e, listId) => {
+    if (e.key === 'Enter') {
+      handleListNameSave(listId)
+    } else if (e.key === 'Escape') {
+      setEditingListId(null)
+    }
+  }
 
   const handleOpenListModal = (list = null) => {
     setEditingList(list)
@@ -676,13 +948,31 @@ const FolderItem = ({
 
   const handleDeleteList = async (e, id) => {
     e.stopPropagation()
-    if (window.confirm('Bu siyahını silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'Siyahını sil',
+      message: 'Bu siyahını silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteTaskList(id).unwrap()
         toast.success('Siyahı silindi!')
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }
+    }
+  }
+
+  const handleArchiveList = async (e, id) => {
+    e.stopPropagation()
+    try {
+      await archiveList(id).unwrap()
+      toast.success('Siyahı arxivləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
     }
   }
 
@@ -715,29 +1005,47 @@ const FolderItem = ({
         </button>
 
         {/* Folder adı */}
-        <button
-          onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)}
-          className="flex items-center gap-2 flex-1 min-w-0"
-        >
-          <svg className="w-4 h-4 shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <svg
+            className="w-4 h-4 shrink-0 text-blue-600 cursor-pointer"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)}
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>
-          <span className="truncate">{folder.name}</span>
-        </button>
+          {isEditingFolder ? (
+            <input
+              ref={folderInputRef}
+              type="text"
+              value={editFolderName}
+              onChange={(e) => setEditFolderName(e.target.value)}
+              onBlur={handleFolderNameSave}
+              onKeyDown={handleFolderNameKeyDown}
+              className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              className="truncate cursor-pointer hover:text-blue-600"
+              onClick={handleFolderNameClick}
+              title="Adı dəyişmək üçün klikləyin"
+            >
+              {folder.name}
+            </span>
+          )}
+        </div>
 
-        {/* Edit/Delete buttonları */}
-        {isHovered && (
+        {isHovered && !isEditingFolder && (
           <div className="flex gap-0.5 shrink-0">
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(folder)
-              }}
-              className="p-1 hover:bg-blue-200 rounded transition-colors"
-              title="Redaktə et"
+              onClick={(e) => onArchive(e, folder.id)}
+              className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
+              title="Arxivlə"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
               </svg>
             </button>
             <button
@@ -785,6 +1093,7 @@ const FolderItem = ({
                   key={list.id}
                   onMouseEnter={() => setHoveredList(list.id)}
                   onMouseLeave={() => setHoveredList(null)}
+                  className="group"
                 >
                   <div
                     className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors ${
@@ -793,27 +1102,46 @@ const FolderItem = ({
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                     }`}
                   >
-                    <button
-                      onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
-                      className="flex items-center gap-2 flex-1 min-w-0"
-                    >
-                      <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <svg
+                        className="w-4 h-4 shrink-0 text-gray-400 cursor-pointer"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
-                      <span className="truncate">{list.name}</span>
-                    </button>
-                    {hoveredList === list.id && (
+                      {editingListId === list.id ? (
+                        <input
+                          ref={listInputRef}
+                          type="text"
+                          value={editListName}
+                          onChange={(e) => setEditListName(e.target.value)}
+                          onBlur={() => handleListNameSave(list.id)}
+                          onKeyDown={(e) => handleListNameKeyDown(e, list.id)}
+                          className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span
+                          className="truncate cursor-pointer hover:text-blue-600"
+                          onClick={(e) => handleListNameClick(e, list)}
+                          title="Adı dəyişmək üçün klikləyin"
+                        >
+                          {list.name}
+                        </span>
+                      )}
+                    </div>
+                    {hoveredList === list.id && editingListId !== list.id && (
                       <div className="flex gap-0.5 shrink-0">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleOpenListModal(list)
-                          }}
-                          className="p-1 hover:bg-blue-200 rounded transition-colors"
-                          title="Redaktə et"
+                          onClick={(e) => handleArchiveList(e, list.id)}
+                          className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
+                          title="Arxivlə"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                           </svg>
                         </button>
                         <button

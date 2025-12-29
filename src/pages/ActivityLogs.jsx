@@ -42,9 +42,16 @@ const getActivityIcon = (type) => {
 }
 
 const formatDate = (dateString) => {
+  if (!dateString) return '-'
+
+  // Sadəcə Date parse et - backend timezone ilə göndərir
   const date = new Date(dateString)
+
   const now = new Date()
-  const diff = now - date
+  let diff = now.getTime() - date.getTime()
+
+  if (diff < 0) diff = 0
+
   const seconds = Math.floor(diff / 1000)
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
@@ -55,13 +62,14 @@ const formatDate = (dateString) => {
   if (hours < 24) return `${hours} saat əvvəl`
   if (days < 7) return `${days} gün əvvəl`
 
-  return date.toLocaleDateString('az-AZ', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
+  const day = date.getDate()
+  const month = months[date.getMonth()]
+  const year = date.getFullYear()
+  const hoursStr = String(date.getHours()).padStart(2, '0')
+  const minutesStr = String(date.getMinutes()).padStart(2, '0')
+
+  return `${day} ${month} ${year} ${hoursStr}:${minutesStr}`
 }
 
 const ActivityLogs = () => {

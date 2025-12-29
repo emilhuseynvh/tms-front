@@ -6,6 +6,7 @@ import {
   useDeleteTaskStatusMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
+import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
 
 const ICON_OPTIONS = [
@@ -31,6 +32,7 @@ const COLOR_PRESETS = [
 ]
 
 const TaskStatuses = () => {
+  const { confirm } = useConfirm()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingStatus, setEditingStatus] = useState(null)
   const [inlineEditId, setInlineEditId] = useState(null)
@@ -52,7 +54,15 @@ const TaskStatuses = () => {
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bu statusu silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'Statusu sil',
+      message: 'Bu statusu silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteStatus(id).unwrap()
         toast.success('Status silindi!')

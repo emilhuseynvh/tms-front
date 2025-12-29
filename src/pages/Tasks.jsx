@@ -7,10 +7,12 @@ import {
   useDeleteFolderMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
+import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
 
 const Tasks = () => {
   const navigate = useNavigate()
+  const { confirm } = useConfirm()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState(null)
 
@@ -30,7 +32,15 @@ const Tasks = () => {
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bu qovluğu silmək istədiyinizdən əminsiniz?')) {
+    const confirmed = await confirm({
+      title: 'Qovluğu sil',
+      message: 'Bu qovluğu silmək istədiyinizdən əminsiniz?',
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
       try {
         await deleteFolder(id).unwrap()
         toast.success('Qovluq silindi!')

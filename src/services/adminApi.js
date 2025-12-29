@@ -12,7 +12,7 @@ export const adminApi = createApi({
       return headers
     },
   }),
-  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'TaskActivities', 'NotificationSettings'],
+  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'Archive', 'TaskActivities', 'NotificationSettings'],
   endpoints: (builder) => ({
     // Space endpoints
     getSpaces: builder.query({
@@ -28,6 +28,16 @@ export const adminApi = createApi({
     getSpace: builder.query({
       query: (id) => `/api/space/${id}`,
       providesTags: ['Spaces'],
+    }),
+
+    getSpaceFullDetails: builder.query({
+      query: ({ id, search }) => {
+        const params = new URLSearchParams()
+        if (search) params.append('search', search)
+        const queryString = params.toString()
+        return `/api/space/${id}/full${queryString ? `?${queryString}` : ''}`
+      },
+      providesTags: ['Spaces', 'Folders', 'TaskLists', 'Tasks'],
     }),
 
     createSpace: builder.mutation({
@@ -125,6 +135,16 @@ export const adminApi = createApi({
     getFoldersBySpace: builder.query({
       query: (spaceId) => `/api/folder/space/${spaceId}`,
       providesTags: ['Folders'],
+    }),
+
+    getFolderFullDetails: builder.query({
+      query: ({ id, search }) => {
+        const params = new URLSearchParams()
+        if (search) params.append('search', search)
+        const queryString = params.toString()
+        return `/api/folder/${id}/full${queryString ? `?${queryString}` : ''}`
+      },
+      providesTags: ['Folders', 'TaskLists', 'Tasks'],
     }),
 
     // Create folder
@@ -402,6 +422,75 @@ export const adminApi = createApi({
       }),
       invalidatesTags: ['NotificationSettings'],
     }),
+
+    getArchive: builder.query({
+      query: () => '/api/archive',
+      providesTags: ['Archive'],
+    }),
+
+    archiveSpace: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/space/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'Spaces'],
+    }),
+
+    unarchiveSpace: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/unarchive/space/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'Spaces'],
+    }),
+
+    archiveFolder: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/folder/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'Folders'],
+    }),
+
+    unarchiveFolder: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/unarchive/folder/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'Folders'],
+    }),
+
+    archiveList: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/list/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'TaskLists'],
+    }),
+
+    unarchiveList: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/unarchive/list/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'TaskLists'],
+    }),
+
+    archiveTask: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/task/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'Tasks'],
+    }),
+
+    unarchiveTask: builder.mutation({
+      query: (id) => ({
+        url: `/api/archive/unarchive/task/${id}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Archive', 'Tasks'],
+    }),
   }),
 })
 
@@ -410,6 +499,7 @@ export const {
   useGetSpacesQuery,
   useGetMySpacesQuery,
   useGetSpaceQuery,
+  useGetSpaceFullDetailsQuery,
   useCreateSpaceMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
@@ -424,6 +514,7 @@ export const {
   useGetFoldersQuery,
   useGetMyFoldersQuery,
   useGetFoldersBySpaceQuery,
+  useGetFolderFullDetailsQuery,
   useCreateFolderMutation,
   useUpdateFolderMutation,
   useDeleteFolderMutation,
@@ -460,4 +551,14 @@ export const {
   // Notification Settings hooks
   useGetNotificationSettingsQuery,
   useUpdateNotificationSettingsMutation,
+  // Archive hooks
+  useGetArchiveQuery,
+  useArchiveSpaceMutation,
+  useUnarchiveSpaceMutation,
+  useArchiveFolderMutation,
+  useUnarchiveFolderMutation,
+  useArchiveListMutation,
+  useUnarchiveListMutation,
+  useArchiveTaskMutation,
+  useUnarchiveTaskMutation,
 } = adminApi
