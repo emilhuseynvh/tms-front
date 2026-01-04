@@ -5,7 +5,6 @@ import Header from '../components/Header'
 import FloatingChat from '../components/FloatingChat'
 import TaskNotifications from '../components/TaskNotifications'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { useNotificationSocket } from '../hooks/useNotificationSocket.jsx'
 import { useGetRoomsQuery } from '../services/chatApi'
 import { useVerifyQuery } from '../services/authApi'
 import { useGetMyTasksQuery } from '../services/adminApi'
@@ -18,7 +17,6 @@ const AppLayout = () => {
   const { data: myTasks = [] } = useGetMyTasksQuery(undefined, { skip: !currentUser })
 
   useWebSocket(null, rooms, currentUser?.id)
-  useNotificationSocket(currentUser?.id)
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">

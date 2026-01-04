@@ -23,7 +23,6 @@ import { useVerifyQuery } from '../services/authApi'
 import Modal from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import { disconnectSocket } from '../hooks/useWebSocket'
-import { disconnectNotificationSocket } from '../hooks/useNotificationSocket.jsx'
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
@@ -104,9 +103,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   }
 
   const handleLogout = () => {
-    // Disconnect WebSockets before logout
+    // Disconnect WebSocket before logout
     disconnectSocket()
-    disconnectNotificationSocket()
     localStorage.removeItem('token')
     toast.success('Çıxış edildi!')
     onClose() // Close sidebar before navigation
