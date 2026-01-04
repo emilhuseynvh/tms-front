@@ -1,31 +1,35 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { toast } from 'react-toastify'
 import { useUpdateTaskMutation } from '../services/adminApi'
 
 const TaskNotifications = ({ tasks }) => {
   const [updateTask] = useUpdateTaskMutation()
+  const notifiedTasksRef = useRef(new Set())
+  const isProcessingRef = useRef(false)
 
   useEffect(() => {
     if (!tasks || tasks.length === 0) return
+    if (isProcessingRef.current) return
 
     const checkDeadlines = async () => {
+      if (isProcessingRef.current) return
+      isProcessingRef.current = true
+
       const now = new Date()
       const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000)
 
       for (const task of tasks) {
-        // Skip if already done or no due date
         if (task.status === 'done' || !task.dueAt) continue
-
-        // Skip if already notified (is_message_send is true)
         if (task.is_message_send === true) continue
+        if (notifiedTasksRef.current.has(task.id)) continue
 
         const dueDate = new Date(task.dueAt)
 
-        // Check if due date is within the next hour AND is_message_send is false (or not set)
-        if (dueDate > now && dueDate <= oneHourFromNow && (task.is_message_send === false || task.is_message_send === undefined || task.is_message_send === null)) {
+        if (dueDate > now && dueDate <= oneHourFromNow) {
+          notifiedTasksRef.current.add(task.id)
+
           const minutesLeft = Math.round((dueDate - now) / (1000 * 60))
 
-          // Show notification with sound
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification('Tapşırıq Xatırlatması', {
               body: `"${task.title}" tapşırığının bitməsinə ${minutesLeft} dəqiqə qalıb!`,
@@ -34,52 +38,43 @@ const TaskNotifications = ({ tasks }) => {
             })
           }
 
-          // Show toast notification
           toast.warning(
             `⏰ "${task.title}" tapşırığının bitməsinə ${minutesLeft} dəqiqə qalıb!`,
             {
               autoClose: 10000,
               position: 'top-right',
+              toastId: `task-deadline-${task.id}`,
             }
           )
 
-          // Play notification sound
           playNotificationSound()
 
-          // Update task to mark is_message_send as true
           try {
-            const updatePayload = {
+            await updateTask({
               id: task.id,
-              title: task.title || '',
-              description: task.description || '',
-              startAt: task.startAt || null,
-              dueAt: task.dueAt,
-              taskListId: task.taskListId,
-              assigneeId: task.assigneeId || 0,
-              status: task.status || 'open',
               is_message_send: true,
-            }
-            
-            // Include parentId only if it exists
-            if (task.parentId !== null && task.parentId !== undefined) {
-              updatePayload.parentId = task.parentId
-            }
-            
-            await updateTask(updatePayload).unwrap()
+            }).unwrap()
           } catch (error) {
             console.error('Failed to update task notification status:', error)
           }
         }
       }
+
+      isProcessingRef.current = false
     }
 
-    // Check immediately
-    checkDeadlines()
+    const timeoutId = setTimeout(checkDeadlines, 100)
 
-    // Check every 5 minutes
-    const interval = setInterval(checkDeadlines, 5 * 60 * 1000)
+    const interval = setInterval(() => {
+      if (!isProcessingRef.current) {
+        checkDeadlines()
+      }
+    }, 5 * 60 * 1000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(timeoutId)
+      clearInterval(interval)
+    }
   }, [tasks, updateTask])
 
   // Request notification permission on mount
