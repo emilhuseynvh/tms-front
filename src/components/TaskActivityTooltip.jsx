@@ -45,17 +45,21 @@ const formatDate = (dateString) => {
   })
 }
 
-const getChangeLabel = (key) => {
+const getChangeLabel = (key, changeType = null) => {
+  if (key === 'assignees' && changeType) {
+    if (changeType === 'added') return 'Təyin edildi'
+    if (changeType === 'removed') return 'Təyinatdan çıxarıldı'
+  }
   const labels = {
-    title: 'Başlıq',
-    description: 'Açıqlama',
+    title: 'Başlıq dəyişdirildi',
+    description: 'Açıqlama dəyişdirildi',
     startAt: 'Başlama tarixi',
     dueAt: 'Bitmə tarixi',
-    statusId: 'Status',
+    statusId: 'Status dəyişdirildi',
     assignees: 'Təyin olunanlar',
-    taskListId: 'Siyahı',
+    taskListId: 'Siyahı dəyişdirildi',
     is_message_send: 'Mesaj göndərildi',
-    link: 'Link',
+    link: 'Link dəyişdirildi',
   }
   return labels[key] || key
 }
@@ -115,11 +119,96 @@ const TaskActivityTooltip = ({ taskId, children }) => {
     statusMap[status.id] = status.name
   })
 
-  // Assignee ID-lərini adlara çevirən funksiya
   const formatAssignees = (ids) => {
     if (!Array.isArray(ids)) return '-'
-    if (ids.length === 0) return '-'
+    if (ids.length === 0) return 'Heç kim'
     return ids.map(id => userMap[id] || `User #${id}`).join(', ')
+  }
+
+  const getAssigneeChanges = (fromIds, toIds) => {
+    const from = Array.isArray(fromIds) ? fromIds : []
+    const to = Array.isArray(toIds) ? toIds : []
+
+    const added = to.filter(id => !from.includes(id))
+    const removed = from.filter(id => !to.includes(id))
+
+    return { added, removed }
+  }
+
+  const formatDetailedChange = (key, value) => {
+    if (key === 'assignees' && typeof value === 'object' && value.from !== undefined) {
+      const { added, removed } = getAssigneeChanges(value.from, value.to)
+      const parts = []
+
+      if (added.length > 0) {
+        const names = added.map(id => userMap[id] || `User #${id}`).join(', ')
+        parts.push({ type: 'added', text: `${names} təyin edildi` })
+      }
+      if (removed.length > 0) {
+        const names = removed.map(id => userMap[id] || `User #${id}`).join(', ')
+        parts.push({ type: 'removed', text: `${names} təyinatdan çıxarıldı` })
+      }
+
+      if (parts.length === 0 && value.to?.length === 0) {
+        parts.push({ type: 'removed', text: 'Bütün təyinatlar silindi' })
+      }
+
+      return parts
+    }
+
+    if (key === 'statusId' && typeof value === 'object' && value.from !== undefined) {
+      const fromName = statusMap[value.from] || 'Yoxdur'
+      const toName = statusMap[value.to] || 'Yoxdur'
+      return [{ type: 'change', from: fromName, to: toName }]
+    }
+
+    if (key === 'startAt' || key === 'dueAt') {
+      if (typeof value === 'object' && value.from !== undefined) {
+        const fromDate = value.from ? formatDateValue(value.from) : 'Təyin edilməmişdi'
+        const toDate = value.to ? formatDateValue(value.to) : 'Silindi'
+
+        if (!value.from && value.to) {
+          return [{ type: 'added', text: `${toDate} olaraq təyin edildi` }]
+        }
+        if (value.from && !value.to) {
+          return [{ type: 'removed', text: `${fromDate} silindi` }]
+        }
+        return [{ type: 'change', from: fromDate, to: toDate }]
+      }
+    }
+
+    if (key === 'title' || key === 'description' || key === 'link') {
+      if (typeof value === 'object' && value.from !== undefined) {
+        const fromVal = value.from || 'Boş'
+        const toVal = value.to || 'Boş'
+
+        if (!value.from && value.to) {
+          return [{ type: 'added', text: `"${truncate(toVal, 25)}" əlavə edildi` }]
+        }
+        if (value.from && !value.to) {
+          return [{ type: 'removed', text: `"${truncate(fromVal, 25)}" silindi` }]
+        }
+        return [{ type: 'change', from: truncate(fromVal, 20), to: truncate(toVal, 20) }]
+      }
+    }
+
+    return null
+  }
+
+  const truncate = (str, len) => {
+    if (!str) return ''
+    return str.length > len ? str.substring(0, len) + '...' : str
+  }
+
+  const formatDateValue = (dateStr) => {
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return dateStr
+      const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
+      return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
+    } catch {
+      return dateStr
+    }
   }
 
   useEffect(() => {
@@ -266,32 +355,72 @@ const TaskActivityTooltip = ({ taskId, children }) => {
 
                     {activity.changes && Object.keys(activity.changes).length > 0 && (
                       <div className="space-y-1.5 mt-2">
-                        {Object.entries(activity.changes).map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="flex items-start gap-2 text-xs bg-gray-50/80 rounded-lg p-2"
-                          >
-                            <span className="flex-shrink-0 text-sm">{getChangeIcon(key)}</span>
-                            <div className="flex-1 min-w-0">
-                              <span className="font-medium text-gray-600">{getChangeLabel(key)}</span>
-                              {typeof value === 'object' && value.from !== undefined ? (
-                                <div className="mt-1 flex items-center gap-1 flex-wrap">
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-700 line-through text-xs">
-                                    {formatValue(value.from, key)}
-                                  </span>
-                                  <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                  </svg>
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs font-medium">
-                                    {formatValue(value.to, key)}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="ml-1 text-gray-700">{formatValue(value, key)}</span>
-                              )}
+                        {Object.entries(activity.changes).map(([key, value]) => {
+                          const detailedChanges = formatDetailedChange(key, value)
+
+                          return (
+                            <div
+                              key={key}
+                              className="flex items-start gap-2 text-xs bg-gray-50/80 rounded-lg p-2"
+                            >
+                              <span className="flex-shrink-0 text-sm">{getChangeIcon(key)}</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium text-gray-600">{getChangeLabel(key)}</span>
+                                {detailedChanges ? (
+                                  <div className="mt-1 space-y-1">
+                                    {detailedChanges.map((change, idx) => (
+                                      <div key={idx} className="flex items-center gap-1 flex-wrap">
+                                        {change.type === 'added' && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                            </svg>
+                                            {change.text}
+                                          </span>
+                                        )}
+                                        {change.type === 'removed' && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                            </svg>
+                                            {change.text}
+                                          </span>
+                                        )}
+                                        {change.type === 'change' && (
+                                          <>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                                              {change.from}
+                                            </span>
+                                            <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                            </svg>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">
+                                              {change.to}
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : typeof value === 'object' && value.from !== undefined ? (
+                                  <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                                      {formatValue(value.from, key)}
+                                    </span>
+                                    <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">
+                                      {formatValue(value.to, key)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="ml-1 text-gray-700">{formatValue(value, key)}</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </div>

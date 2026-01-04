@@ -94,6 +94,9 @@ const Sidebar = ({ isOpen, onClose }) => {
       try {
         await deleteSpace(id).unwrap()
         toast.success('Sahə silindi!')
+        if (location.pathname.includes(`/space/${id}`)) {
+          navigate('/')
+        }
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }
@@ -497,6 +500,9 @@ const SpaceItem = ({
       try {
         await deleteFolder(id).unwrap()
         toast.success('Qovluq silindi!')
+        if (location.pathname.includes(`/folder/${id}`)) {
+          onNavigate(`/tasks/space/${space.id}`)
+        }
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }
@@ -513,7 +519,7 @@ const SpaceItem = ({
     setIsDirectListModalOpen(false)
   }
 
-  const handleDeleteList = async (e, id) => {
+  const handleDeleteList = async (e, id, folderId = null) => {
     e.stopPropagation()
     const confirmed = await confirm({
       title: 'Siyahını sil',
@@ -527,6 +533,13 @@ const SpaceItem = ({
       try {
         await deleteTaskList(id).unwrap()
         toast.success('Siyahı silindi!')
+        if (location.pathname.includes(`/list/${id}`)) {
+          if (folderId) {
+            onNavigate(`/tasks/space/${space.id}/folder/${folderId}`)
+          } else {
+            onNavigate(`/tasks/space/${space.id}`)
+          }
+        }
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }
@@ -960,6 +973,9 @@ const FolderItem = ({
       try {
         await deleteTaskList(id).unwrap()
         toast.success('Siyahı silindi!')
+        if (location.pathname.includes(`/list/${id}`)) {
+          onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)
+        }
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
       }

@@ -225,6 +225,12 @@ export const adminApi = createApi({
       invalidatesTags: ['TaskLists', 'Trash', 'ActivityLogs'],
     }),
 
+    // Get my tasks (for notifications)
+    getMyTasks: builder.query({
+      query: () => '/api/task/my-tasks',
+      providesTags: ['Tasks'],
+    }),
+
     // Get tasks by task list
     getTasksByList: builder.query({
       query: ({ taskListId, search, startDate, endDate, statusId, assigneeId }) => {
@@ -525,6 +531,7 @@ export const {
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
   // Task hooks
+  useGetMyTasksQuery,
   useGetTasksByListQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,

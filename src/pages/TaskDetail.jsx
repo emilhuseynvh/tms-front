@@ -11,7 +11,6 @@ import {
   useReorderTaskMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
-import TaskNotifications from '../components/TaskNotifications'
 import TaskActivityTooltip from '../components/TaskActivityTooltip'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
@@ -745,7 +744,6 @@ const TaskDetail = () => {
 
   return (
     <>
-      <TaskNotifications tasks={tasks} />
       <div className="p-4 md:p-6">
       {/* Header */}
       <div className="mb-4 md:mb-6">
@@ -1484,7 +1482,11 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)
-  const [selectedTime, setSelectedTime] = useState({ hours: '12', minutes: '00' })
+  const now = new Date()
+  const [selectedTime, setSelectedTime] = useState({
+    hours: String(now.getHours()).padStart(2, '0'),
+    minutes: String(now.getMinutes()).padStart(2, '0')
+  })
   const triggerRef = useRef(null)
   const dropdownRef = useRef(null)
 
@@ -1501,11 +1503,23 @@ const ModalDatePicker = ({ value, onChange, placeholder }) => {
       }
     } else {
       setSelectedDate(null)
-      setSelectedTime({ hours: '12', minutes: '00' })
+      const currentTime = new Date()
+      setSelectedTime({
+        hours: String(currentTime.getHours()).padStart(2, '0'),
+        minutes: String(currentTime.getMinutes()).padStart(2, '0')
+      })
     }
   }, [value])
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+  useEffect(() => {
+    if (isOpen && !value) {
+      const currentTime = new Date()
+      setSelectedTime({
+        hours: String(currentTime.getHours()).padStart(2, '0'),
+        minutes: String(currentTime.getMinutes()).padStart(2, '0')
+      })
+    }
+  }, [isOpen, value])
 
   useEffect(() => {
     if (isOpen && triggerRef.current) {
@@ -1909,7 +1923,11 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)
-  const [selectedTime, setSelectedTime] = useState({ hours: '12', minutes: '00' })
+  const now = new Date()
+  const [selectedTime, setSelectedTime] = useState({
+    hours: String(now.getHours()).padStart(2, '0'),
+    minutes: String(now.getMinutes()).padStart(2, '0')
+  })
   const triggerRef = useRef(null)
   const dropdownRef = useRef(null)
 
@@ -1927,9 +1945,23 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
       }
     } else {
       setSelectedDate(null)
-      setSelectedTime({ hours: '12', minutes: '00' })
+      const currentTime = new Date()
+      setSelectedTime({
+        hours: String(currentTime.getHours()).padStart(2, '0'),
+        minutes: String(currentTime.getMinutes()).padStart(2, '0')
+      })
     }
   }, [value])
+
+  useEffect(() => {
+    if (isOpen && !value) {
+      const currentTime = new Date()
+      setSelectedTime({
+        hours: String(currentTime.getHours()).padStart(2, '0'),
+        minutes: String(currentTime.getMinutes()).padStart(2, '0')
+      })
+    }
+  }, [isOpen, value])
 
   // Position dropdown
   useEffect(() => {
@@ -2146,8 +2178,10 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
     const day = date.getDate()
     const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
     const month = months[date.getMonth()]
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
 
-    return `${day} ${month}`
+    return `${day} ${month} ${hours}:${minutes}`
   }
 
   const monthNames = [
