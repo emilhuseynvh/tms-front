@@ -6,12 +6,17 @@ import {
   useCreateSpaceMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
+  useReorderSpacesMutation,
   useCreateFolderMutation,
   useUpdateFolderMutation,
   useDeleteFolderMutation,
+  useReorderFoldersMutation,
+  useMoveFolderMutation,
   useCreateTaskListMutation,
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
+  useReorderTaskListsMutation,
+  useMoveTaskListMutation,
   useArchiveSpaceMutation,
   useArchiveFolderMutation,
   useArchiveListMutation,
@@ -40,6 +45,196 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [createSpace, { isLoading: isCreatingSpace }] = useCreateSpaceMutation()
   const [updateSpace, { isLoading: isUpdatingSpace }] = useUpdateSpaceMutation()
   const [deleteSpace] = useDeleteSpaceMutation()
+  const [reorderSpaces] = useReorderSpacesMutation()
+  const [reorderFolders] = useReorderFoldersMutation()
+  const [moveFolder] = useMoveFolderMutation()
+  const [reorderTaskLists] = useReorderTaskListsMutation()
+  const [moveTaskList] = useMoveTaskListMutation()
+
+  const [draggedItem, setDraggedItem] = useState(null)
+  const [dropTarget, setDropTarget] = useState(null)
+
+  // Drag start - item-i tutub başlayanda
+  const handleDragStart = (e, type, item, parentInfo = null) => {
+    e.stopPropagation()
+    const dragData = { type, item, parentInfo }
+    setDraggedItem(dragData)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragData))
+  }
+
+  // Drag end - buraxanda və ya ləğv edəndə
+  const handleDragEnd = () => {
+    setDraggedItem(null)
+    setDropTarget(null)
+  }
+
+  // Drag over - üzərindən keçəndə
+  const handleDragOver = (e, type, item, parentInfo = null) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+
+    // Drop target-i yalnız fərqli item üçün göstər
+    if (!draggedItem) return
+    if (draggedItem.type === type && draggedItem.item.id === item.id) return
+
+    setDropTarget({ type, item, parentInfo })
+  }
+
+  // Drag leave - sahəni tərk edəndə
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Yalnız parent-ə çıxanda target-i sil
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDropTarget(null)
+    }
+  }
+
+  // Drop - item-i buraxanda
+  const handleDrop = async (e, targetType, targetItem, targetParentInfo = null) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!draggedItem) return
+
+    const { type: sourceType, item: sourceItem, parentInfo: sourceParentInfo } = draggedItem
+
+    // Eyni item-in üzərinə drop etmə
+    if (sourceType === targetType && sourceItem.id === targetItem.id) {
+      handleDragEnd()
+      return
+    }
+
+    try {
+      // SPACE -> SPACE: Reorder spaces
+      if (sourceType === 'space' && targetType === 'space') {
+        const spaceIds = spaces.map(s => s.id)
+        const fromIndex = spaceIds.indexOf(sourceItem.id)
+        const toIndex = spaceIds.indexOf(targetItem.id)
+        if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+          spaceIds.splice(fromIndex, 1)
+          spaceIds.splice(toIndex, 0, sourceItem.id)
+          await reorderSpaces(spaceIds).unwrap()
+        }
+      }
+
+      // FOLDER -> FOLDER: Reorder or move folders
+      else if (sourceType === 'folder' && targetType === 'folder') {
+        const sourceSpaceId = sourceParentInfo
+        const targetSpaceId = targetParentInfo
+
+        if (sourceSpaceId === targetSpaceId) {
+          // Eyni space içində reorder
+          const space = spaces.find(s => s.id === sourceSpaceId)
+          if (space?.folders) {
+            const folderIds = space.folders.map(f => f.id)
+            const fromIndex = folderIds.indexOf(sourceItem.id)
+            const toIndex = folderIds.indexOf(targetItem.id)
+            if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+              folderIds.splice(fromIndex, 1)
+              folderIds.splice(toIndex, 0, sourceItem.id)
+              await reorderFolders({ spaceId: sourceSpaceId, folderIds }).unwrap()
+            }
+          }
+        } else {
+          // Başqa space-ə köçür
+          await moveFolder({ id: sourceItem.id, targetSpaceId }).unwrap()
+          toast.success('Qovluq köçürüldü!')
+        }
+      }
+
+      // FOLDER -> SPACE: Move folder to different space
+      else if (sourceType === 'folder' && targetType === 'space') {
+        const sourceSpaceId = sourceParentInfo
+        if (sourceSpaceId !== targetItem.id) {
+          await moveFolder({ id: sourceItem.id, targetSpaceId: targetItem.id }).unwrap()
+          toast.success('Qovluq köçürüldü!')
+        }
+      }
+
+      // LIST -> LIST: Reorder or move lists
+      else if (sourceType === 'list' && targetType === 'list') {
+        const sourceFolderId = sourceParentInfo?.folderId
+        const sourceSpaceId = sourceParentInfo?.spaceId
+        const targetFolderId = targetParentInfo?.folderId
+        const targetSpaceId = targetParentInfo?.spaceId
+
+        // Eyni konteyner içindəmi?
+        const isSameFolder = sourceFolderId && targetFolderId && sourceFolderId === targetFolderId
+        const isSameSpace = !sourceFolderId && !targetFolderId && sourceSpaceId && targetSpaceId && sourceSpaceId === targetSpaceId
+
+        if (isSameFolder || isSameSpace) {
+          // Reorder
+          let lists = []
+          if (isSameFolder) {
+            const space = spaces.find(s => s.folders?.some(f => f.id === sourceFolderId))
+            const folder = space?.folders?.find(f => f.id === sourceFolderId)
+            lists = folder?.taskLists || []
+          } else {
+            const space = spaces.find(s => s.id === sourceSpaceId)
+            lists = space?.taskLists || []
+          }
+
+          const listIds = lists.map(l => l.id)
+          const fromIndex = listIds.indexOf(sourceItem.id)
+          const toIndex = listIds.indexOf(targetItem.id)
+
+          if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+            listIds.splice(fromIndex, 1)
+            listIds.splice(toIndex, 0, sourceItem.id)
+            await reorderTaskLists(listIds).unwrap()
+          }
+        } else {
+          // Fərqli konteynerə köçür
+          await moveTaskList({
+            id: sourceItem.id,
+            targetFolderId: targetFolderId || null,
+            targetSpaceId: targetFolderId ? null : targetSpaceId
+          }).unwrap()
+          toast.success('Siyahı köçürüldü!')
+        }
+      }
+
+      // LIST -> FOLDER: Move list to folder
+      else if (sourceType === 'list' && targetType === 'folder') {
+        const sourceFolderId = sourceParentInfo?.folderId
+        if (sourceFolderId !== targetItem.id) {
+          await moveTaskList({
+            id: sourceItem.id,
+            targetFolderId: targetItem.id,
+            targetSpaceId: null
+          }).unwrap()
+          toast.success('Siyahı köçürüldü!')
+        }
+      }
+
+      // LIST -> SPACE: Move list directly to space
+      else if (sourceType === 'list' && targetType === 'space') {
+        const sourceSpaceId = sourceParentInfo?.spaceId
+        const sourceFolderId = sourceParentInfo?.folderId
+        // Yalnız fərqli yerə köçürəndə
+        if (sourceFolderId || sourceSpaceId !== targetItem.id) {
+          await moveTaskList({
+            id: sourceItem.id,
+            targetFolderId: null,
+            targetSpaceId: targetItem.id
+          }).unwrap()
+          toast.success('Siyahı köçürüldü!')
+        }
+      }
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+
+    handleDragEnd()
+  }
+
+  // Drop target olub-olmadığını yoxla
+  const isDropTarget = (type, itemId) => {
+    return dropTarget?.type === type && dropTarget?.item?.id === itemId
+  }
 
   // Login olduqda bütün space-ləri açıq şəkildə göstər
   useEffect(() => {
@@ -339,6 +534,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                       <SpaceItem
                         key={space.id}
                         space={space}
+                        spaces={spaces}
                         isExpanded={expandedSpaces[space.id]}
                         onToggle={toggleSpace}
                         onExpand={expandSpace}
@@ -351,6 +547,14 @@ const Sidebar = ({ isOpen, onClose }) => {
                         }}
                         location={location}
                         onUpdateSpace={updateSpace}
+                        draggedItem={draggedItem}
+                        dropTarget={dropTarget}
+                        onDragStart={handleDragStart}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDragEnd={handleDragEnd}
+                        onDrop={handleDrop}
+                        isDropTarget={isDropTarget}
                       />
                     ))
                   )}
@@ -396,6 +600,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
 const SpaceItem = ({
   space,
+  spaces,
   isExpanded,
   onToggle,
   onExpand,
@@ -405,8 +610,15 @@ const SpaceItem = ({
   onNavigate,
   location,
   onUpdateSpace,
+  draggedItem,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDragEnd,
+  onDrop,
+  isDropTarget,
 }) => {
-  // Folder və taskLists məlumatları artıq space obyektindən gəlir
   const folders = space.folders || []
   const directLists = space.taskLists || []
 
@@ -627,17 +839,28 @@ const SpaceItem = ({
     }
   }
 
+  const isDragging = draggedItem?.type === 'space' && draggedItem?.item?.id === space.id
+  const canDropHere = draggedItem && (draggedItem.type === 'space' || draggedItem.type === 'folder' || draggedItem.type === 'list')
+  const isCurrentDropTarget = isDropTarget('space', space.id)
+
   return (
     <li
       onMouseEnter={() => onHover(space.id)}
       onMouseLeave={() => onHover(null)}
+      className={isDragging ? 'opacity-50' : ''}
     >
       <div
-        className={`group flex items-center gap-1 px-2 py-2 rounded-md text-sm transition-colors ${
+        draggable
+        onDragStart={(e) => onDragStart(e, 'space', space, null)}
+        onDragOver={(e) => canDropHere && onDragOver(e, 'space', space, null)}
+        onDragLeave={onDragLeave}
+        onDragEnd={onDragEnd}
+        onDrop={(e) => canDropHere && onDrop(e, 'space', space, null)}
+        className={`group flex items-center gap-1 px-2 py-2 rounded-md text-sm transition-colors cursor-grab ${
           isActive
             ? 'bg-blue-200 text-blue-900 font-medium'
             : 'text-blue-800 hover:bg-blue-100'
-        }`}
+        } ${isCurrentDropTarget && !isDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
       >
         {/* Ox buttonu */}
         <button
@@ -726,23 +949,40 @@ const SpaceItem = ({
                   onNavigate={onNavigate}
                   location={location}
                   onUpdateFolder={updateFolder}
+                  draggedItem={draggedItem}
+                  onDragStart={onDragStart}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onDragEnd={onDragEnd}
+                  onDrop={onDrop}
+                  isDropTarget={isDropTarget}
                 />
               ))}
 
               {/* Birbaşa Space-ə bağlı list-lər */}
-              {directLists.map((list) => (
+              {directLists.map((list) => {
+                const isListDragging = draggedItem?.type === 'list' && draggedItem?.item?.id === list.id
+                const canDropList = draggedItem?.type === 'list'
+                const isListCurrentDropTarget = isDropTarget('list', list.id)
+                return (
                 <li
                   key={list.id}
                   onMouseEnter={() => setHoveredList(list.id)}
                   onMouseLeave={() => setHoveredList(null)}
-                  className="group"
+                  className={`group ${isListDragging ? 'opacity-50' : ''}`}
                 >
                   <div
-                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors ${
+                    draggable
+                    onDragStart={(e) => onDragStart(e, 'list', list, { spaceId: space.id, folderId: null })}
+                    onDragOver={(e) => canDropList && onDragOver(e, 'list', list, { spaceId: space.id, folderId: null })}
+                    onDragLeave={onDragLeave}
+                    onDragEnd={onDragEnd}
+                    onDrop={(e) => canDropList && onDrop(e, 'list', list, { spaceId: space.id, folderId: null })}
+                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-grab ${
                       location.pathname.includes(`/list/${list.id}`)
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                    }`}
+                    } ${isListCurrentDropTarget && !isListDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <svg
@@ -789,7 +1029,7 @@ const SpaceItem = ({
                     )}
                   </div>
                 </li>
-              ))}
+              )})}
 
               {/* Əlavə et menu */}
               <li className="relative">
@@ -872,8 +1112,14 @@ const FolderItem = ({
   onNavigate,
   location,
   onUpdateFolder,
+  draggedItem,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDragEnd,
+  onDrop,
+  isDropTarget,
 }) => {
-  // TaskLists məlumatları artıq folder obyektindən gəlir
   const taskLists = folder.taskLists || []
 
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
@@ -1011,17 +1257,28 @@ const FolderItem = ({
     }
   }
 
+  const isFolderDragging = draggedItem?.type === 'folder' && draggedItem?.item?.id === folder.id
+  const canDropHere = draggedItem && (draggedItem.type === 'folder' || draggedItem.type === 'list')
+  const isFolderCurrentDropTarget = isDropTarget('folder', folder.id)
+
   return (
     <li
       onMouseEnter={() => onHover(folder.id)}
       onMouseLeave={() => onHover(null)}
+      className={isFolderDragging ? 'opacity-50' : ''}
     >
       <div
-        className={`group flex items-center gap-1.5 px-2 py-2 rounded-md text-sm transition-colors ${
+        draggable
+        onDragStart={(e) => onDragStart(e, 'folder', folder, spaceId)}
+        onDragOver={(e) => canDropHere && onDragOver(e, 'folder', folder, spaceId)}
+        onDragLeave={onDragLeave}
+        onDragEnd={onDragEnd}
+        onDrop={(e) => canDropHere && onDrop(e, 'folder', folder, spaceId)}
+        className={`group flex items-center gap-1.5 px-2 py-2 rounded-md text-sm transition-colors cursor-grab ${
           isActive
             ? 'bg-blue-100 text-blue-900 font-medium'
             : 'text-blue-800 hover:bg-blue-50'
-        }`}
+        } ${isFolderCurrentDropTarget && !isFolderDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
       >
         {/* Ox buttonu */}
         <button
@@ -1103,19 +1360,29 @@ const FolderItem = ({
             </li>
           ) : (
             <>
-              {taskLists.map((list) => (
+              {taskLists.map((list) => {
+                const isListDragging = draggedItem?.type === 'list' && draggedItem?.item?.id === list.id
+                const canDropList = draggedItem?.type === 'list'
+                const isListCurrentDropTarget = isDropTarget('list', list.id)
+                return (
                 <li
                   key={list.id}
                   onMouseEnter={() => setHoveredList(list.id)}
                   onMouseLeave={() => setHoveredList(null)}
-                  className="group"
+                  className={`group ${isListDragging ? 'opacity-50' : ''}`}
                 >
                   <div
-                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors ${
+                    draggable
+                    onDragStart={(e) => onDragStart(e, 'list', list, { folderId: folder.id, spaceId: null })}
+                    onDragOver={(e) => canDropList && onDragOver(e, 'list', list, { folderId: folder.id, spaceId: null })}
+                    onDragLeave={onDragLeave}
+                    onDragEnd={onDragEnd}
+                    onDrop={(e) => canDropList && onDrop(e, 'list', list, { folderId: folder.id, spaceId: null })}
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-grab ${
                       location.pathname.includes(`/list/${list.id}`)
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                    }`}
+                    } ${isListCurrentDropTarget && !isListDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <svg
@@ -1162,7 +1429,7 @@ const FolderItem = ({
                     )}
                   </div>
                 </li>
-              ))}
+              )})}
               <li>
                 <button
                   onClick={() => handleOpenListModal()}

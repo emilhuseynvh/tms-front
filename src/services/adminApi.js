@@ -66,6 +66,15 @@ export const adminApi = createApi({
       invalidatesTags: ['Spaces', 'Trash', 'ActivityLogs'],
     }),
 
+    reorderSpaces: builder.mutation({
+      query: (spaceIds) => ({
+        url: '/api/space/reorder',
+        method: 'POST',
+        body: { spaceIds },
+      }),
+      invalidatesTags: ['Spaces'],
+    }),
+
     // Get all users
     getUsers: builder.query({
       query: () => '/api/user',
@@ -176,6 +185,24 @@ export const adminApi = createApi({
       invalidatesTags: ['Folders', 'Trash', 'ActivityLogs'],
     }),
 
+    reorderFolders: builder.mutation({
+      query: ({ spaceId, folderIds }) => ({
+        url: `/api/folder/reorder/${spaceId}`,
+        method: 'POST',
+        body: { folderIds },
+      }),
+      invalidatesTags: ['Folders', 'Spaces'],
+    }),
+
+    moveFolder: builder.mutation({
+      query: ({ id, targetSpaceId }) => ({
+        url: `/api/folder/${id}/move`,
+        method: 'POST',
+        body: { targetSpaceId },
+      }),
+      invalidatesTags: ['Folders', 'Spaces', 'ActivityLogs'],
+    }),
+
     // Get task lists by folder
     getTaskListsByFolder: builder.query({
       query: ({ folderId, search, startDate, endDate }) => {
@@ -229,6 +256,24 @@ export const adminApi = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: ['TaskLists', 'Trash', 'ActivityLogs'],
+    }),
+
+    reorderTaskLists: builder.mutation({
+      query: (listIds) => ({
+        url: '/api/task-list/reorder',
+        method: 'POST',
+        body: { listIds },
+      }),
+      invalidatesTags: ['TaskLists', 'Spaces', 'Folders'],
+    }),
+
+    moveTaskList: builder.mutation({
+      query: ({ id, targetFolderId, targetSpaceId }) => ({
+        url: `/api/task-list/${id}/move`,
+        method: 'POST',
+        body: { targetFolderId, targetSpaceId },
+      }),
+      invalidatesTags: ['TaskLists', 'Spaces', 'Folders', 'ActivityLogs'],
     }),
 
     // Get my tasks (for notifications)
@@ -557,6 +602,7 @@ export const {
   useCreateSpaceMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
+  useReorderSpacesMutation,
   // User hooks
   useGetUsersQuery,
   useCreateUserMutation,
@@ -572,6 +618,8 @@ export const {
   useCreateFolderMutation,
   useUpdateFolderMutation,
   useDeleteFolderMutation,
+  useReorderFoldersMutation,
+  useMoveFolderMutation,
   // TaskList hooks
   useGetTaskListsByFolderQuery,
   useGetTaskListsBySpaceQuery,
@@ -579,6 +627,8 @@ export const {
   useCreateTaskListMutation,
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
+  useReorderTaskListsMutation,
+  useMoveTaskListMutation,
   // Task hooks
   useGetMyTasksQuery,
   useGetTasksByListQuery,

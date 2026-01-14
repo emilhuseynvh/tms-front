@@ -1654,10 +1654,18 @@ const TaskFormModal = ({
 
       if (payload.startAt) {
         payload.startAt = new Date(payload.startAt).toISOString()
+      } else {
+        delete payload.startAt
       }
       if (payload.dueAt) {
         payload.dueAt = new Date(payload.dueAt).toISOString()
+      } else {
+        delete payload.dueAt
       }
+      if (!payload.link) delete payload.link
+      if (!payload.doc) delete payload.doc
+      if (!payload.meetingNotes) delete payload.meetingNotes
+      if (!payload.description) delete payload.description
 
       if (task) {
         await updateTask({ id: task.id, ...payload }).unwrap()
