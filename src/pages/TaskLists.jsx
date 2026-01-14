@@ -12,6 +12,9 @@ import {
   useArchiveFolderMutation,
   useArchiveListMutation,
   useArchiveTaskMutation,
+  useUpdateSpaceMutation,
+  useDeleteSpaceMutation,
+  useArchiveSpaceMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
 import { useConfirm } from '../context/ConfirmContext'
@@ -57,6 +60,13 @@ const TaskLists = () => {
   const [archiveFolder] = useArchiveFolderMutation()
   const [archiveList] = useArchiveListMutation()
   const [archiveTask] = useArchiveTaskMutation()
+  const [updateSpace] = useUpdateSpaceMutation()
+  const [deleteSpace] = useDeleteSpaceMutation()
+  const [archiveSpace] = useArchiveSpaceMutation()
+
+  // Space/Folder edit modal state
+  const [isEditingPageTitle, setIsEditingPageTitle] = useState(false)
+  const [pageTitleForm, setPageTitleForm] = useState({ name: '', description: '' })
 
   const pageTitle = data?.name || 'Yüklənir...'
   const pageDescription = data?.description
@@ -166,6 +176,76 @@ const TaskLists = () => {
     }
   }
 
+  // Space/Folder page title handlers
+  const handleOpenPageTitleEdit = () => {
+    setPageTitleForm({ name: data?.name || '', description: data?.description || '' })
+    setIsEditingPageTitle(true)
+  }
+
+  const handleClosePageTitleEdit = () => {
+    setIsEditingPageTitle(false)
+    setPageTitleForm({ name: '', description: '' })
+  }
+
+  const handleUpdatePageTitle = async (e) => {
+    e.preventDefault()
+    try {
+      if (folderId) {
+        await updateFolder({ id: parseInt(folderId), ...pageTitleForm }).unwrap()
+        toast.success('Qovluq yeniləndi!')
+      } else {
+        await updateSpace({ id: parseInt(spaceId), ...pageTitleForm }).unwrap()
+        toast.success('Sahə yeniləndi!')
+      }
+      handleClosePageTitleEdit()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleDeletePageItem = async () => {
+    const itemType = folderId ? 'qovluğu' : 'sahəni'
+    const confirmed = await confirm({
+      title: folderId ? 'Qovluğu sil' : 'Sahəni sil',
+      message: `Bu ${itemType} silmək istədiyinizdən əminsiniz?`,
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (confirmed) {
+      try {
+        if (folderId) {
+          await deleteFolder(parseInt(folderId)).unwrap()
+          toast.success('Qovluq silindi!')
+          navigate(`/tasks/space/${spaceId}`)
+        } else {
+          await deleteSpace(parseInt(spaceId)).unwrap()
+          toast.success('Sahə silindi!')
+          navigate('/projects')
+        }
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+      }
+    }
+  }
+
+  const handleArchivePageItem = async () => {
+    try {
+      if (folderId) {
+        await archiveFolder(parseInt(folderId)).unwrap()
+        toast.success(`"${data?.name}" arxivə əlavə edildi!`)
+        navigate(`/tasks/space/${spaceId}`)
+      } else {
+        await archiveSpace(parseInt(spaceId)).unwrap()
+        toast.success(`"${data?.name}" arxivə əlavə edildi!`)
+        navigate('/projects')
+      }
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
   const isEmpty = !folderId
     ? folders.length === 0 && directLists.length === 0 && allTasks.length === 0
     : directLists.length === 0 && allTasks.length === 0
@@ -184,7 +264,38 @@ const TaskLists = () => {
               </svg>
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
+                <div className="flex gap-1">
+                  <button
+                    onClick={handleOpenPageTitleEdit}
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    title="Redaktə et"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleArchivePageItem}
+                    className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                    title="Arxivə at"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleDeletePageItem}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    title="Sil"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
               {pageDescription && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{pageDescription}</p>}
             </div>
           </div>
@@ -254,6 +365,43 @@ const TaskLists = () => {
             isUpdating={isUpdatingFolder}
           />
         )}
+
+        {/* Space/Folder Edit Modal */}
+        <Modal
+          isOpen={isEditingPageTitle}
+          onClose={handleClosePageTitleEdit}
+          title={folderId ? 'Qovluğu redaktə et' : 'Sahəni redaktə et'}
+        >
+          <form onSubmit={handleUpdatePageTitle} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Ad</label>
+              <input
+                type="text"
+                value={pageTitleForm.name}
+                onChange={(e) => setPageTitleForm({ ...pageTitleForm, name: e.target.value })}
+                required
+                placeholder={folderId ? 'Qovluq adı' : 'Sahə adı'}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Açıqlama</label>
+              <textarea
+                value={pageTitleForm.description}
+                onChange={(e) => setPageTitleForm({ ...pageTitleForm, description: e.target.value })}
+                rows={3}
+                placeholder="Açıqlama..."
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <button type="button" onClick={handleClosePageTitleEdit} className="flex-1 px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50">Ləğv et</button>
+              <button type="submit" className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                Yenilə
+              </button>
+            </div>
+          </form>
+        </Modal>
       </div>
     )
   }
@@ -271,7 +419,38 @@ const TaskLists = () => {
             </svg>
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
+              <div className="flex gap-1">
+                <button
+                  onClick={handleOpenPageTitleEdit}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  title="Redaktə et"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={handleArchivePageItem}
+                  className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                  title="Arxivə at"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                </button>
+                <button
+                  onClick={handleDeletePageItem}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                  title="Sil"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            </div>
             {pageDescription && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{pageDescription}</p>}
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
@@ -579,6 +758,43 @@ const TaskLists = () => {
           isUpdating={isUpdatingFolder}
         />
       )}
+
+      {/* Space/Folder Edit Modal */}
+      <Modal
+        isOpen={isEditingPageTitle}
+        onClose={handleClosePageTitleEdit}
+        title={folderId ? 'Qovluğu redaktə et' : 'Sahəni redaktə et'}
+      >
+        <form onSubmit={handleUpdatePageTitle} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Ad</label>
+            <input
+              type="text"
+              value={pageTitleForm.name}
+              onChange={(e) => setPageTitleForm({ ...pageTitleForm, name: e.target.value })}
+              required
+              placeholder={folderId ? 'Qovluq adı' : 'Sahə adı'}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Açıqlama</label>
+            <textarea
+              value={pageTitleForm.description}
+              onChange={(e) => setPageTitleForm({ ...pageTitleForm, description: e.target.value })}
+              rows={3}
+              placeholder="Açıqlama..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={handleClosePageTitleEdit} className="flex-1 px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50">Ləğv et</button>
+            <button type="submit" className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700">
+              Yenilə
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

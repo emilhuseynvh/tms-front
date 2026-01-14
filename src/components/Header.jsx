@@ -6,6 +6,7 @@ import { authApi } from '../services/authApi'
 import { adminApi } from '../services/adminApi'
 import { chatApi } from '../services/chatApi'
 import { toast } from 'react-toastify'
+import NotificationBell from './NotificationBell'
 
 const Header = ({ onMenuClick }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -48,11 +49,12 @@ const Header = ({ onMenuClick }) => {
         </svg>
       </button>
 
-      {/* Spacer for desktop */}
       <div className="hidden md:block flex-1"></div>
 
-      {/* Profile Dropdown */}
-      <div className="relative ml-auto" ref={dropdownRef}>
+      <div className="flex items-center gap-2">
+        <NotificationBell />
+
+        <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
@@ -128,6 +130,7 @@ const Header = ({ onMenuClick }) => {
             </button>
           </div>
         )}
+        </div>
       </div>
     </header>
   )

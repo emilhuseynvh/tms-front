@@ -7,8 +7,6 @@ const formatDate = (dateString) => {
 
   let date = new Date(dateString)
 
-  // Əgər tarixdə timezone məlumatı yoxdursa, UTC kimi qəbul et
-  // Timezone formatları: Z, +04:00, -05:00, +0400
   const hasTimezone = /[Zz]|[+-]\d{2}:?\d{2}/.test(dateString)
   if (!hasTimezone) {
     date = new Date(dateString + 'Z')
@@ -45,10 +43,20 @@ const formatDate = (dateString) => {
   })
 }
 
-const getChangeLabel = (key, changeType = null) => {
-  if (key === 'assignees' && changeType) {
-    if (changeType === 'added') return 'Təyin edildi'
-    if (changeType === 'removed') return 'Təyinatdan çıxarıldı'
+const getChangeLabel = (key, isFirstTime = false) => {
+  if (isFirstTime) {
+    const addLabels = {
+      title: 'Başlıq əlavə edildi',
+      description: 'Açıqlama əlavə edildi',
+      startAt: 'Başlama tarixi əlavə edildi',
+      dueAt: 'Bitmə tarixi əlavə edildi',
+      statusId: 'Status əlavə edildi',
+      assignees: 'Təyin olunanlar',
+      taskListId: 'Siyahı əlavə edildi',
+      link: 'Link əlavə edildi',
+      parentId: 'Ana tapşırıq əlavə edildi',
+    }
+    return addLabels[key] || key
   }
   const labels = {
     title: 'Başlıq dəyişdirildi',
@@ -60,6 +68,7 @@ const getChangeLabel = (key, changeType = null) => {
     taskListId: 'Siyahı dəyişdirildi',
     is_message_send: 'Mesaj göndərildi',
     link: 'Link dəyişdirildi',
+    parentId: 'Ana tapşırıq',
   }
   return labels[key] || key
 }
@@ -75,6 +84,7 @@ const getChangeIcon = (key) => {
     taskListId: '📋',
     is_message_send: '📧',
     link: '🔗',
+    parentId: '🔗',
   }
   return icons[key] || '📌'
 }
@@ -157,21 +167,31 @@ const TaskActivityTooltip = ({ taskId, children }) => {
     }
 
     if (key === 'statusId' && typeof value === 'object' && value.from !== undefined) {
-      const fromName = statusMap[value.from] || 'Yoxdur'
-      const toName = statusMap[value.to] || 'Yoxdur'
+      const fromName = value.from ? (statusMap[value.from] || `Status #${value.from}`) : null
+      const toName = value.to ? (statusMap[value.to] || `Status #${value.to}`) : null
+
+      // Əgər əvvəl yox idisə və indi var - əlavə edildi
+      if (!value.from && value.to) {
+        return [{ type: 'added', text: toName }]
+      }
+      // Əgər əvvəl var idi və indi yox - silindi
+      if (value.from && !value.to) {
+        return [{ type: 'removed', text: fromName }]
+      }
+      // Normal dəyişiklik
       return [{ type: 'change', from: fromName, to: toName }]
     }
 
     if (key === 'startAt' || key === 'dueAt') {
       if (typeof value === 'object' && value.from !== undefined) {
-        const fromDate = value.from ? formatDateValue(value.from) : 'Təyin edilməmişdi'
-        const toDate = value.to ? formatDateValue(value.to) : 'Silindi'
+        const fromDate = value.from ? formatDateValue(value.from) : null
+        const toDate = value.to ? formatDateValue(value.to) : null
 
         if (!value.from && value.to) {
-          return [{ type: 'added', text: `${toDate} olaraq təyin edildi` }]
+          return [{ type: 'added', text: toDate }]
         }
         if (value.from && !value.to) {
-          return [{ type: 'removed', text: `${fromDate} silindi` }]
+          return [{ type: 'removed', text: fromDate }]
         }
         return [{ type: 'change', from: fromDate, to: toDate }]
       }
@@ -179,16 +199,31 @@ const TaskActivityTooltip = ({ taskId, children }) => {
 
     if (key === 'title' || key === 'description' || key === 'link') {
       if (typeof value === 'object' && value.from !== undefined) {
-        const fromVal = value.from || 'Boş'
-        const toVal = value.to || 'Boş'
+        const fromVal = value.from || null
+        const toVal = value.to || null
 
         if (!value.from && value.to) {
-          return [{ type: 'added', text: `"${truncate(toVal, 25)}" əlavə edildi` }]
+          return [{ type: 'added', text: `"${truncate(toVal, 30)}"` }]
         }
         if (value.from && !value.to) {
-          return [{ type: 'removed', text: `"${truncate(fromVal, 25)}" silindi` }]
+          return [{ type: 'removed', text: `"${truncate(fromVal, 30)}"` }]
         }
         return [{ type: 'change', from: truncate(fromVal, 20), to: truncate(toVal, 20) }]
+      }
+    }
+
+    if (key === 'parentId' && typeof value === 'object') {
+      const fromName = value.from || null
+      const toName = value.to || null
+
+      if (!fromName && toName) {
+        return [{ type: 'added', text: `"${toName}" tapşırığının alt tapşırığı oldu` }]
+      }
+      if (fromName && !toName) {
+        return [{ type: 'removed', text: `"${fromName}" tapşırığından ayrıldı` }]
+      }
+      if (fromName && toName) {
+        return [{ type: 'change', from: fromName, to: toName }]
       }
     }
 
@@ -335,7 +370,7 @@ const TaskActivityTooltip = ({ taskId, children }) => {
                   {/* Avatar */}
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
-                      {(activity.username || 'U').charAt(0).toUpperCase()}
+                      {(activity.username || 'N').charAt(0).toUpperCase()}
                     </div>
                   </div>
 
@@ -343,7 +378,7 @@ const TaskActivityTooltip = ({ taskId, children }) => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-semibold text-gray-800 truncate">
-                        {activity.username || 'İstifadəçi'}
+                        {activity.username || 'Naməlum istifadəçi'}
                       </span>
                       <span className="text-xs text-gray-400 flex items-center gap-1 flex-shrink-0 ml-2">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -357,6 +392,8 @@ const TaskActivityTooltip = ({ taskId, children }) => {
                       <div className="space-y-1.5 mt-2">
                         {Object.entries(activity.changes).map(([key, value]) => {
                           const detailedChanges = formatDetailedChange(key, value)
+                          // İlk dəfə əlavə edilirsə (from null/undefined və to var)
+                          const isFirstTime = detailedChanges && detailedChanges.length > 0 && detailedChanges[0].type === 'added'
 
                           return (
                             <div
@@ -365,7 +402,7 @@ const TaskActivityTooltip = ({ taskId, children }) => {
                             >
                               <span className="flex-shrink-0 text-sm">{getChangeIcon(key)}</span>
                               <div className="flex-1 min-w-0">
-                                <span className="font-medium text-gray-600">{getChangeLabel(key)}</span>
+                                <span className="font-medium text-gray-600">{getChangeLabel(key, isFirstTime)}</span>
                                 {detailedChanges ? (
                                   <div className="mt-1 space-y-1">
                                     {detailedChanges.map((change, idx) => (

@@ -6,20 +6,19 @@ import {
   useCreateSpaceMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
-  useGetFoldersBySpaceQuery,
   useCreateFolderMutation,
   useUpdateFolderMutation,
   useDeleteFolderMutation,
-  useGetTaskListsByFolderQuery,
-  useGetTaskListsBySpaceQuery,
   useCreateTaskListMutation,
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
   useArchiveSpaceMutation,
   useArchiveFolderMutation,
-  useArchiveListMutation
+  useArchiveListMutation,
+  adminApi
 } from '../services/adminApi'
-import { useVerifyQuery } from '../services/authApi'
+import { useVerifyQuery, authApi } from '../services/authApi'
+import { useDispatch } from 'react-redux'
 import Modal from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import { disconnectSocket } from '../hooks/useWebSocket'
@@ -27,6 +26,7 @@ import { disconnectSocket } from '../hooks/useWebSocket'
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
   const location = useLocation()
+  const dispatch = useDispatch()
   const { confirm } = useConfirm()
   const [isTasksOpen, setIsTasksOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -41,7 +41,18 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [updateSpace, { isLoading: isUpdatingSpace }] = useUpdateSpaceMutation()
   const [deleteSpace] = useDeleteSpaceMutation()
 
-  // Get user role (handle both nested and direct role)
+  // Login olduqda bütün space-ləri açıq şəkildə göstər
+  useEffect(() => {
+    if (spaces.length > 0) {
+      const allExpanded = {}
+      spaces.forEach(space => {
+        allExpanded[space.id] = true
+      })
+      setExpandedSpaces(allExpanded)
+      setIsTasksOpen(true)
+    }
+  }, [spaces])
+
   const userRole = useMemo(() => {
     const role = currentUser?.role?.role || currentUser?.role || 'user'
     return typeof role === 'string' ? role.toLowerCase() : 'user'
@@ -49,9 +60,46 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const filteredSpaces = useMemo(() => {
     if (!searchQuery.trim()) return spaces
-    return spaces.filter(space =>
-      space.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+
+    const query = searchQuery.toLowerCase()
+
+    return spaces.map(space => {
+      const spaceMatches = space.name.toLowerCase().includes(query)
+
+      // Folder-ləri və onların task list-lərini filtr et
+      const filteredFolders = (space.folders || []).map(folder => {
+        const folderMatches = folder.name.toLowerCase().includes(query)
+
+        // Task list-ləri filtr et
+        const filteredTaskLists = (folder.taskLists || []).filter(list =>
+          list.name.toLowerCase().includes(query)
+        )
+
+        // Folder özü və ya içindəki list uyğun gəlirsə göstər
+        if (folderMatches || filteredTaskLists.length > 0) {
+          return {
+            ...folder,
+            taskLists: folderMatches ? folder.taskLists : filteredTaskLists
+          }
+        }
+        return null
+      }).filter(Boolean)
+
+      // Birbaşa space-ə bağlı task list-ləri filtr et
+      const filteredDirectLists = (space.taskLists || []).filter(list =>
+        list.name.toLowerCase().includes(query)
+      )
+
+      // Space özü, folder-lər və ya task list-lər uyğun gəlirsə göstər
+      if (spaceMatches || filteredFolders.length > 0 || filteredDirectLists.length > 0) {
+        return {
+          ...space,
+          folders: spaceMatches ? space.folders : filteredFolders,
+          taskLists: spaceMatches ? space.taskLists : filteredDirectLists
+        }
+      }
+      return null
+    }).filter(Boolean)
   }, [spaces, searchQuery])
 
   const toggleSpace = useCallback((spaceId, e) => {
@@ -106,6 +154,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     // Disconnect WebSocket before logout
     disconnectSocket()
     localStorage.removeItem('token')
+    // RTK Query cache-ni təmizlə
+    dispatch(adminApi.util.resetApiState())
+    dispatch(authApi.util.resetApiState())
     toast.success('Çıxış edildi!')
     onClose() // Close sidebar before navigation
     navigate('/login')
@@ -355,14 +406,10 @@ const SpaceItem = ({
   location,
   onUpdateSpace,
 }) => {
-  const { data: folders = [], isLoading: isFoldersLoading } = useGetFoldersBySpaceQuery(
-    space.id,
-    { skip: !isExpanded }
-  )
-  const { data: directLists = [], isLoading: isDirectListsLoading } = useGetTaskListsBySpaceQuery(
-    space.id,
-    { skip: !isExpanded }
-  )
+  // Folder və taskLists məlumatları artıq space obyektindən gəlir
+  const folders = space.folders || []
+  const directLists = space.taskLists || []
+
   const [createFolder, { isLoading: isCreatingFolder }] = useCreateFolderMutation()
   const [updateFolder, { isLoading: isUpdatingFolder }] = useUpdateFolderMutation()
   const [deleteFolder] = useDeleteFolderMutation()
@@ -382,7 +429,14 @@ const SpaceItem = ({
   const [editingFolder, setEditingFolder] = useState(null)
   const [isDirectListModalOpen, setIsDirectListModalOpen] = useState(false)
   const [editingList, setEditingList] = useState(null)
-  const [expandedFolders, setExpandedFolders] = useState({})
+  const [expandedFolders, setExpandedFolders] = useState(() => {
+    // Başlanğıcda bütün folder-ləri açıq göstər
+    const initial = {}
+    folders.forEach(folder => {
+      initial[folder.id] = true
+    })
+    return initial
+  })
   const [hoveredFolder, setHoveredFolder] = useState(null)
   const [hoveredList, setHoveredList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -393,7 +447,6 @@ const SpaceItem = ({
   const listInputRef = useRef(null)
 
   const isActive = location.pathname.startsWith(`/tasks/space/${space.id}`)
-  const isLoading = isFoldersLoading || isDirectListsLoading
 
   // Space inline edit
   useEffect(() => {
@@ -630,8 +683,10 @@ const SpaceItem = ({
           ) : (
             <span
               className="truncate cursor-pointer hover:text-blue-600"
-              onClick={handleSpaceNameClick}
-              title="Adı dəyişmək üçün klikləyin"
+              onClick={() => {
+                onExpand(space.id)
+                onNavigate(`/tasks/space/${space.id}`)
+              }}
             >
               {space.name}
             </span>
@@ -641,21 +696,12 @@ const SpaceItem = ({
         {isHovered && !isEditingSpace && (
           <div className="flex gap-0.5 shrink-0">
             <button
-              onClick={handleArchiveSpace}
-              className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
-              title="Arxivlə"
+              onClick={handleSpaceNameClick}
+              className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+              title="Adı dəyiş"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-            </button>
-            <button
-              onClick={(e) => onDelete(e, space.id)}
-              className="p-1 hover:bg-red-100 hover:text-red-600 rounded transition-colors"
-              title="Sil"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
           </div>
@@ -665,18 +711,6 @@ const SpaceItem = ({
       {/* Space içəriyi: Folder-lər və birbaşa list-lər */}
       {isExpanded && (
         <ul className="ml-4 mt-1 space-y-0.5 border-l-2 border-purple-200 pl-3">
-          {isLoading ? (
-            <li className="px-2 py-2 text-sm text-gray-400">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Yüklənir...
-              </div>
-            </li>
-          ) : (
-            <>
               {/* Folder-lər */}
               {folders.map((folder) => (
                 <FolderItem
@@ -734,8 +768,7 @@ const SpaceItem = ({
                       ) : (
                         <span
                           className="truncate cursor-pointer hover:text-blue-600"
-                          onClick={(e) => handleListNameClick(e, list)}
-                          title="Adı dəyişmək üçün klikləyin"
+                          onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
                         >
                           {list.name}
                         </span>
@@ -744,21 +777,12 @@ const SpaceItem = ({
                     {hoveredList === list.id && editingListId !== list.id && (
                       <div className="flex gap-0.5 shrink-0">
                         <button
-                          onClick={(e) => handleArchiveList(e, list.id)}
-                          className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
-                          title="Arxivlə"
+                          onClick={(e) => handleListNameClick(e, list)}
+                          className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+                          title="Adı dəyiş"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteList(e, list.id)}
-                          className="p-1 hover:bg-red-100 hover:text-red-600 rounded transition-colors"
-                          title="Sil"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                       </div>
@@ -804,8 +828,6 @@ const SpaceItem = ({
                   </div>
                 )}
               </li>
-            </>
-          )}
         </ul>
       )}
 
@@ -851,10 +873,9 @@ const FolderItem = ({
   location,
   onUpdateFolder,
 }) => {
-  const { data: taskLists = [], isLoading } = useGetTaskListsByFolderQuery(
-    { folderId: folder.id },
-    { skip: !isExpanded }
-  )
+  // TaskLists məlumatları artıq folder obyektindən gəlir
+  const taskLists = folder.taskLists || []
+
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
   const [updateTaskList, { isLoading: isUpdatingList }] = useUpdateTaskListMutation()
   const [deleteTaskList] = useDeleteTaskListMutation()
@@ -1043,8 +1064,7 @@ const FolderItem = ({
           ) : (
             <span
               className="truncate cursor-pointer hover:text-blue-600"
-              onClick={handleFolderNameClick}
-              title="Adı dəyişmək üçün klikləyin"
+              onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)}
             >
               {folder.name}
             </span>
@@ -1054,21 +1074,12 @@ const FolderItem = ({
         {isHovered && !isEditingFolder && (
           <div className="flex gap-0.5 shrink-0">
             <button
-              onClick={(e) => onArchive(e, folder.id)}
-              className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
-              title="Arxivlə"
+              onClick={handleFolderNameClick}
+              className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+              title="Adı dəyiş"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-            </button>
-            <button
-              onClick={(e) => onDelete(e, folder.id)}
-              className="p-1 hover:bg-red-100 hover:text-red-600 rounded transition-colors"
-              title="Sil"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
           </div>
@@ -1078,17 +1089,7 @@ const FolderItem = ({
       {/* Task listləri */}
       {isExpanded && (
         <ul className="ml-3 mt-1 space-y-0.5 border-l-2 border-blue-100 pl-3">
-          {isLoading ? (
-            <li className="px-2 py-2 text-sm text-gray-400">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Yüklənir...
-              </div>
-            </li>
-          ) : taskLists.length === 0 ? (
+          {taskLists.length === 0 ? (
             <li>
               <button
                 onClick={() => setIsListModalOpen(true)}
@@ -1140,8 +1141,7 @@ const FolderItem = ({
                       ) : (
                         <span
                           className="truncate cursor-pointer hover:text-blue-600"
-                          onClick={(e) => handleListNameClick(e, list)}
-                          title="Adı dəyişmək üçün klikləyin"
+                          onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
                         >
                           {list.name}
                         </span>
@@ -1150,21 +1150,12 @@ const FolderItem = ({
                     {hoveredList === list.id && editingListId !== list.id && (
                       <div className="flex gap-0.5 shrink-0">
                         <button
-                          onClick={(e) => handleArchiveList(e, list.id)}
-                          className="p-1 hover:bg-amber-100 hover:text-amber-600 rounded transition-colors"
-                          title="Arxivlə"
+                          onClick={(e) => handleListNameClick(e, list)}
+                          className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+                          title="Adı dəyiş"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteList(e, list.id)}
-                          className="p-1 hover:bg-red-100 hover:text-red-600 rounded transition-colors"
-                          title="Sil"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                       </div>

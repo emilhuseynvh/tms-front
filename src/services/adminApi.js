@@ -12,7 +12,7 @@ export const adminApi = createApi({
       return headers
     },
   }),
-  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'Archive', 'TaskActivities', 'NotificationSettings'],
+  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'Archive', 'TaskActivities', 'NotificationSettings', 'Notifications'],
   endpoints: (builder) => ({
     // Space endpoints
     getSpaces: builder.query({
@@ -164,7 +164,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: folderData,
       }),
-      invalidatesTags: ['Folders', 'ActivityLogs'],
+      invalidatesTags: ['Folders', 'Spaces', 'ActivityLogs'],
     }),
 
     // Delete folder
@@ -196,6 +196,12 @@ export const adminApi = createApi({
       providesTags: ['TaskLists'],
     }),
 
+    // Get single task list
+    getTaskList: builder.query({
+      query: (id) => `/api/task-list/${id}`,
+      providesTags: ['TaskLists'],
+    }),
+
     // Create task list
     createTaskList: builder.mutation({
       query: (taskListData) => ({
@@ -213,7 +219,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskListData,
       }),
-      invalidatesTags: ['TaskLists', 'ActivityLogs'],
+      invalidatesTags: ['TaskLists', 'Spaces', 'ActivityLogs'],
     }),
 
     // Delete task list
@@ -414,7 +420,6 @@ export const adminApi = createApi({
       invalidatesTags: ['Trash'],
     }),
 
-    // Notification Settings endpoints (admin only)
     getNotificationSettings: builder.query({
       query: () => '/api/notifications/settings',
       providesTags: ['NotificationSettings'],
@@ -427,6 +432,49 @@ export const adminApi = createApi({
         body: settingsData,
       }),
       invalidatesTags: ['NotificationSettings'],
+    }),
+
+    getNotifications: builder.query({
+      query: ({ filter = 'all', page = 1, limit = 20 } = {}) =>
+        `/api/notifications?filter=${filter}&page=${page}&limit=${limit}`,
+      providesTags: ['Notifications'],
+    }),
+
+    getUnreadNotificationCount: builder.query({
+      query: () => '/api/notifications/unread-count',
+      providesTags: ['Notifications'],
+    }),
+
+    markNotificationAsRead: builder.mutation({
+      query: (id) => ({
+        url: `/api/notifications/${id}/read`,
+        method: 'PUT',
+      }),
+      invalidatesTags: ['Notifications'],
+    }),
+
+    markAllNotificationsAsRead: builder.mutation({
+      query: () => ({
+        url: '/api/notifications/read-all',
+        method: 'PUT',
+      }),
+      invalidatesTags: ['Notifications'],
+    }),
+
+    deleteNotification: builder.mutation({
+      query: (id) => ({
+        url: `/api/notifications/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Notifications'],
+    }),
+
+    clearAllNotifications: builder.mutation({
+      query: () => ({
+        url: '/api/notifications/clear/all',
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Notifications'],
     }),
 
     getArchive: builder.query({
@@ -527,6 +575,7 @@ export const {
   // TaskList hooks
   useGetTaskListsByFolderQuery,
   useGetTaskListsBySpaceQuery,
+  useGetTaskListQuery,
   useCreateTaskListMutation,
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
@@ -558,6 +607,13 @@ export const {
   // Notification Settings hooks
   useGetNotificationSettingsQuery,
   useUpdateNotificationSettingsMutation,
+  // Notification hooks
+  useGetNotificationsQuery,
+  useGetUnreadNotificationCountQuery,
+  useMarkNotificationAsReadMutation,
+  useMarkAllNotificationsAsReadMutation,
+  useDeleteNotificationMutation,
+  useClearAllNotificationsMutation,
   // Archive hooks
   useGetArchiveQuery,
   useArchiveSpaceMutation,

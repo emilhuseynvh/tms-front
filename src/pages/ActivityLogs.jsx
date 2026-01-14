@@ -5,25 +5,29 @@ import {
   useGetTaskStatusesQuery,
 } from '../services/adminApi'
 
-const ACTIVITY_TYPES = [
-  { value: '', label: 'Bütün əməliyyatlar' },
-  { value: 'space_create', label: 'Sahə yaradılması' },
-  { value: 'space_update', label: 'Sahə yenilənməsi' },
-  { value: 'space_delete', label: 'Sahə silinməsi' },
-  { value: 'space_restore', label: 'Sahə bərpası' },
-  { value: 'folder_create', label: 'Qovluq yaradılması' },
-  { value: 'folder_update', label: 'Qovluq yenilənməsi' },
-  { value: 'folder_delete', label: 'Qovluq silinməsi' },
-  { value: 'folder_restore', label: 'Qovluq bərpası' },
-  { value: 'list_create', label: 'Siyahı yaradılması' },
-  { value: 'list_update', label: 'Siyahı yenilənməsi' },
-  { value: 'list_delete', label: 'Siyahı silinməsi' },
-  { value: 'list_restore', label: 'Siyahı bərpası' },
-  { value: 'task_create', label: 'Tapşırıq yaradılması' },
-  { value: 'task_update', label: 'Tapşırıq yenilənməsi' },
-  { value: 'task_delete', label: 'Tapşırıq silinməsi' },
-  { value: 'task_restore', label: 'Tapşırıq bərpası' },
+const ENTITY_TYPES = [
+  { value: '', label: 'Hamısı' },
+  { value: 'space', label: 'Sahə' },
+  { value: 'folder', label: 'Qovluq' },
+  { value: 'list', label: 'Siyahı' },
+  { value: 'task', label: 'Tapşırıq' },
 ]
+
+const ACTION_TYPES = [
+  { value: '', label: 'Hamısı' },
+  { value: 'create', label: 'Yaradılma' },
+  { value: 'update', label: 'Yenilənmə' },
+  { value: 'delete', label: 'Silinmə' },
+  { value: 'restore', label: 'Bərpa' },
+]
+
+const getActivityTypeLabel = (type) => {
+  if (!type) return type
+  const [entity, action] = type.split('_')
+  const entityLabel = ENTITY_TYPES.find(e => e.value === entity)?.label || entity
+  const actionLabel = ACTION_TYPES.find(a => a.value === action)?.label || action
+  return `${entityLabel} ${actionLabel.toLowerCase()}sı`
+}
 
 const getActivityTypeColor = (type) => {
   if (type?.includes('create')) return 'bg-green-100 text-green-700'
@@ -44,7 +48,6 @@ const getActivityIcon = (type) => {
 const formatDate = (dateString) => {
   if (!dateString) return '-'
 
-  // Sadəcə Date parse et - backend timezone ilə göndərir
   const date = new Date(dateString)
 
   const now = new Date()
@@ -72,18 +75,48 @@ const formatDate = (dateString) => {
   return `${day} ${month} ${year} ${hoursStr}:${minutesStr}`
 }
 
+const formatFullDate = (dateString) => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr']
+  const day = date.getDate()
+  const month = months[date.getMonth()]
+  const year = date.getFullYear()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds}`
+}
+
 const ActivityLogs = () => {
   const [filters, setFilters] = useState({
     page: 1,
     limit: 20,
     userId: '',
-    type: '',
+    entityType: '',
+    actionType: '',
     search: '',
     startDate: '',
     endDate: '',
   })
 
-  const { data, isLoading } = useGetActivityLogsQuery(filters)
+  const buildTypeFilter = () => {
+    if (filters.entityType && filters.actionType) {
+      return `${filters.entityType}_${filters.actionType}`
+    }
+    if (filters.entityType) {
+      return filters.entityType
+    }
+    if (filters.actionType) {
+      return filters.actionType
+    }
+    return ''
+  }
+
+  const { data, isLoading } = useGetActivityLogsQuery({
+    ...filters,
+    type: buildTypeFilter()
+  })
   const { data: users = [] } = useGetUsersQuery()
   const { data: statuses = [] } = useGetTaskStatusesQuery()
 
@@ -119,6 +152,7 @@ const ActivityLogs = () => {
       link: 'Link dəyişdirildi',
       name: 'Ad',
       color: 'Rəng',
+      parentId: 'Ana tapşırıq',
     }
     return labels[key] || key
   }
@@ -136,6 +170,7 @@ const ActivityLogs = () => {
       link: '🔗',
       name: '✏️',
       color: '🎨',
+      parentId: '🔗',
     }
     return icons[key] || '📝'
   }
@@ -221,6 +256,21 @@ const ActivityLogs = () => {
       }
     }
 
+    if (key === 'parentId' && typeof value === 'object') {
+      const fromName = value.from || null
+      const toName = value.to || null
+
+      if (!fromName && toName) {
+        return [{ type: 'added', text: `"${toName}" tapşırığının alt tapşırığı oldu` }]
+      }
+      if (fromName && !toName) {
+        return [{ type: 'removed', text: `"${fromName}" tapşırığından ayrıldı` }]
+      }
+      if (fromName && toName) {
+        return [{ type: 'change', from: fromName, to: toName }]
+      }
+    }
+
     return null
   }
 
@@ -254,7 +304,7 @@ const ActivityLogs = () => {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Search */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Axtar</label>
@@ -284,15 +334,15 @@ const ActivityLogs = () => {
             </select>
           </div>
 
-          {/* Type Filter */}
+          {/* Entity Type Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Əməliyyat növü</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Element</label>
             <select
-              value={filters.type}
-              onChange={(e) => handleFilterChange('type', e.target.value)}
+              value={filters.entityType}
+              onChange={(e) => handleFilterChange('entityType', e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {ACTIVITY_TYPES.map((type) => (
+              {ENTITY_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
@@ -300,26 +350,42 @@ const ActivityLogs = () => {
             </select>
           </div>
 
-          {/* Date Range */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Başlanğıc</label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Son</label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+          {/* Action Type Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Əməliyyat</label>
+            <select
+              value={filters.actionType}
+              onChange={(e) => handleFilterChange('actionType', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {ACTION_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Başlanğıc</label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => handleFilterChange('startDate', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Son</label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => handleFilterChange('endDate', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
         </div>
       </div>
@@ -353,13 +419,11 @@ const ActivityLogs = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded ${getActivityTypeColor(log.type)}`}>
-                      {ACTIVITY_TYPES.find(t => t.value === log.type)?.label || log.type}
+                      {getActivityTypeLabel(log.type) || log.type}
                     </span>
-                    {log.user && (
-                      <span className="text-xs text-gray-500">
-                        {log.user.username} tərəfindən
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-500">
+                      {log.user?.username || 'Naməlum istifadəçi'} tərəfindən
+                    </span>
                   </div>
                   <p className="text-sm text-gray-900">{log.description}</p>
                   {log.entityName && (
@@ -440,8 +504,13 @@ const ActivityLogs = () => {
                 </div>
 
                 {/* Time */}
-                <div className="text-xs text-gray-400 flex-shrink-0">
-                  {formatDate(log.createdAt)}
+                <div className="relative group">
+                  <div className="text-xs text-gray-400 flex-shrink-0 cursor-help">
+                    {formatDate(log.createdAt)}
+                  </div>
+                  <div className="absolute right-0 bottom-full mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-10">
+                    {formatFullDate(log.createdAt)}
+                  </div>
                 </div>
               </div>
             </div>
