@@ -649,6 +649,21 @@ const SpaceItem = ({
     })
     return initial
   })
+
+  // Yeni folder əlavə olunduqda avtomatik aç
+  useEffect(() => {
+    setExpandedFolders(prev => {
+      const updated = { ...prev }
+      let hasChanges = false
+      folders.forEach(folder => {
+        if (updated[folder.id] === undefined) {
+          updated[folder.id] = true
+          hasChanges = true
+        }
+      })
+      return hasChanges ? updated : prev
+    })
+  }, [folders])
   const [hoveredFolder, setHoveredFolder] = useState(null)
   const [hoveredList, setHoveredList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)

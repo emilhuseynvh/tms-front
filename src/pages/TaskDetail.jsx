@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router'
+import { useDispatch } from 'react-redux'
 import {
   useGetTasksByListQuery,
   useGetUsersQuery,
@@ -13,6 +14,8 @@ import {
   useUpdateTaskListMutation,
   useDeleteTaskListMutation,
   useArchiveListMutation,
+  useArchiveTaskMutation,
+  adminApi,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
 import TaskActivityTooltip from '../components/TaskActivityTooltip'
@@ -22,6 +25,7 @@ import { toast } from 'react-toastify'
 const TaskDetail = () => {
   const { spaceId, folderId, taskListId } = useParams()
   const navigate = useNavigate()
+  const dispatch = useDispatch()
   const { confirm } = useConfirm()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState(null)
@@ -60,7 +64,7 @@ const TaskDetail = () => {
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
-  const { data: tasks = [], isLoading } = useGetTasksByListQuery({
+  const { data: tasks = [], isLoading, refetch: refetchTasks } = useGetTasksByListQuery({
     taskListId,
     search,
     startDate,
@@ -78,6 +82,10 @@ const TaskDetail = () => {
   const [updateTaskList] = useUpdateTaskListMutation()
   const [deleteTaskList] = useDeleteTaskListMutation()
   const [archiveList] = useArchiveListMutation()
+  const [archiveTask] = useArchiveTaskMutation()
+
+  // Selected tasks state
+  const [selectedTasks, setSelectedTasks] = useState(new Set())
 
   // Task List edit state
   const [isEditingTaskList, setIsEditingTaskList] = useState(false)
@@ -105,6 +113,7 @@ const TaskDetail = () => {
     if (!resizing) return
 
     const handleMouseMove = (e) => {
+      e.preventDefault()
       const diff = e.clientX - resizing.startX
       const newWidth = Math.max(50, resizing.startWidth + diff) // Minimum 50px
       setColumnWidths(prev => ({
@@ -113,21 +122,35 @@ const TaskDetail = () => {
       }))
     }
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e) => {
+      e.preventDefault()
       setResizing(null)
     }
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    // Use capture phase to ensure events are handled
+    document.addEventListener('mousemove', handleMouseMove, true)
+    document.addEventListener('mouseup', handleMouseUp, true)
+    // Prevent text selection during resize
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('mousemove', handleMouseMove, true)
+      document.removeEventListener('mouseup', handleMouseUp, true)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
     }
   }, [resizing])
 
   // Calculate total table width
   const totalTableWidth = Object.values(columnWidths).reduce((sum, w) => sum + w, 0)
+
+  // Helper function to get column style
+  const getColumnStyle = (columnName) => ({
+    width: `${columnWidths[columnName]}px`,
+    minWidth: `${columnWidths[columnName]}px`,
+    maxWidth: `${columnWidths[columnName]}px`
+  })
 
   const handleOpenModal = (task = null, parentId = null) => {
     setEditingTask(task)
@@ -232,8 +255,22 @@ const TaskDetail = () => {
       }
       if (parentId) {
         payload.parentId = parentId
+        // Parent task-ı açıq saxla ki, yeni subtask görünsün
+        setExpandedTasks(prev => {
+          const newSet = new Set(prev)
+          newSet.add(parentId)
+          return newSet
+        })
       }
-      await createTask(payload).unwrap()
+      const newTask = await createTask(payload).unwrap()
+      // Yeni task-ı da avtomatik aç
+      if (newTask?.id) {
+        setExpandedTasks(prev => {
+          const newSet = new Set(prev)
+          newSet.add(newTask.id)
+          return newSet
+        })
+      }
       setNewTaskTitle('')
       setIsAddingTask(false)
       toast.success('Tapşırıq yaradıldı!')
@@ -467,6 +504,163 @@ const TaskDetail = () => {
     }
   }
 
+  // Get all task IDs recursively (including children)
+  const getAllTaskIds = (taskList) => {
+    const ids = []
+    for (const task of taskList) {
+      ids.push(task.id)
+      if (task.children && task.children.length > 0) {
+        ids.push(...getAllTaskIds(task.children))
+      }
+    }
+    return ids
+  }
+
+  // Task selection handlers
+  const handleTaskSelect = (taskId, checked) => {
+    setSelectedTasks(prev => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(taskId)
+      } else {
+        newSet.delete(taskId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const allIds = getAllTaskIds(tasks)
+      setSelectedTasks(new Set(allIds))
+    } else {
+      setSelectedTasks(new Set())
+    }
+  }
+
+  const isAllSelected = useMemo(() => {
+    if (tasks.length === 0) return false
+    const allIds = getAllTaskIds(tasks)
+    return allIds.length > 0 && allIds.every(id => selectedTasks.has(id))
+  }, [tasks, selectedTasks])
+
+  const isIndeterminate = useMemo(() => {
+    if (tasks.length === 0) return false
+    const allIds = getAllTaskIds(tasks)
+    return allIds.some(id => selectedTasks.has(id)) && !allIds.every(id => selectedTasks.has(id))
+  }, [tasks, selectedTasks])
+
+  // Bulk archive tasks
+  const handleBulkArchive = async () => {
+    if (selectedTasks.size === 0) return
+
+    const confirmed = await confirm({
+      title: 'Tapşırıqları arxivlə',
+      message: `${selectedTasks.size} tapşırığı arxivləmək istədiyinizdən əminsiniz?`,
+      confirmText: 'Arxivlə',
+      cancelText: 'Ləğv et',
+      type: 'warning'
+    })
+
+    if (!confirmed) return
+
+    try {
+      const taskIds = Array.from(selectedTasks)
+      const promises = taskIds.map(taskId => archiveTask(taskId).unwrap())
+      await Promise.all(promises)
+      
+      // Clear selection first
+      setSelectedTasks(new Set())
+      
+      // Invalidate cache to mark all Tasks queries as stale
+      dispatch(adminApi.util.invalidateTags(['Tasks']))
+      
+      // Force refetch the current query
+      await refetchTasks()
+      
+      toast.success(`${taskIds.length} tapşırıq arxivləndi!`)
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  // Bulk delete tasks
+  const handleBulkDelete = async () => {
+    if (selectedTasks.size === 0) return
+
+    const confirmed = await confirm({
+      title: 'Tapşırıqları sil',
+      message: `${selectedTasks.size} tapşırığı silmək istədiyinizdən əminsiniz? Bu əməliyyat geri alına bilməz!`,
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (!confirmed) return
+
+    try {
+      const taskIds = Array.from(selectedTasks)
+      const promises = taskIds.map(taskId => deleteTask(taskId).unwrap())
+      await Promise.all(promises)
+      toast.success(`${taskIds.length} tapşırıq silindi!`)
+      setSelectedTasks(new Set())
+      // Manually refetch to ensure UI updates immediately
+      await refetchTasks()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  // Bulk copy tasks
+  const handleBulkCopy = async () => {
+    if (selectedTasks.size === 0) return
+
+    try {
+      let successCount = 0
+      let errorCount = 0
+
+      for (const taskId of selectedTasks) {
+        const task = findTaskById(tasks, taskId)
+        if (!task) {
+          errorCount++
+          continue
+        }
+
+        try {
+          const payload = {
+            title: `${task.title} (kopya)`,
+            description: task.description || '',
+            taskListId: parseInt(taskListId),
+            statusId: task.statusId || null,
+            startAt: task.startAt ? new Date(task.startAt).toISOString() : new Date().toISOString(),
+            dueAt: task.dueAt ? new Date(task.dueAt).toISOString() : null,
+            link: task.link || null,
+            doc: task.doc || null,
+            meetingNotes: task.meetingNotes || null,
+            assigneeIds: task.assignees?.map(a => a.id) || [],
+            parentId: task.parentId || null,
+          }
+
+          await createTask(payload).unwrap()
+          successCount++
+        } catch (error) {
+          errorCount++
+          console.error(`Failed to copy task ${taskId}:`, error)
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} tapşırıq kopyalandı!`)
+      }
+      if (errorCount > 0) {
+        toast.error(`${errorCount} tapşırıq kopyalanarkən xəta baş verdi!`)
+      }
+      setSelectedTasks(new Set())
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
   const formatDate = (dateString) => {
     if (!dateString) return '-'
     const date = new Date(dateString)
@@ -551,6 +745,30 @@ const TaskDetail = () => {
     }
   }, [isAddingTask])
 
+  // Bütün taskları (subtasklar daxil) avtomatik aç
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      // Recursive funksiya: bütün task ID-lərini topla
+      const getAllTaskIds = (taskList) => {
+        const ids = []
+        for (const task of taskList) {
+          ids.push(task.id)
+          if (task.children && task.children.length > 0) {
+            ids.push(...getAllTaskIds(task.children))
+          }
+        }
+        return ids
+      }
+
+      const allTaskIds = getAllTaskIds(tasks)
+      setExpandedTasks(prev => {
+        const newSet = new Set(prev)
+        allTaskIds.forEach(id => newSet.add(id))
+        return newSet
+      })
+    }
+  }, [tasks])
+
   // Recursive function to render task rows
   const renderTaskRow = (task, depth = 0, index = 0) => {
     const indent = depth * 20
@@ -587,7 +805,7 @@ const TaskDetail = () => {
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           } ${dropIndicatorClass}`}
         >
-          <td style={{ width: columnWidths.checkbox }} className="px-2 py-2">
+          <td style={getColumnStyle('checkbox')} className="px-2 py-2">
             <div className="flex items-center gap-1" style={{ paddingLeft: `${indent}px` }}>
               {hasChildren ? (
                 <button
@@ -610,12 +828,19 @@ const TaskDetail = () => {
               ) : (
                 <div className="w-4" />
               )}
-              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-              </svg>
+              <input
+                type="checkbox"
+                checked={selectedTasks.has(task.id)}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  handleTaskSelect(task.id, e.target.checked)
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+              />
             </div>
           </td>
-          <td style={{ width: columnWidths.title }} className="px-2 py-2">
+          <td style={getColumnStyle('title')} className="px-2 py-2">
             <div className="flex items-center gap-2">
               <div className="flex-1 min-w-0">
                 {isEditingTitle ? (
@@ -638,9 +863,7 @@ const TaskDetail = () => {
                 )}
               </div>
               {/* Action buttons - Sub-task, Edit, Delete */}
-              <div className={`flex-shrink-0 flex items-center gap-1 transition-all ${
-                isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-              }`}>
+              <div className={`flex-shrink-0 flex items-center gap-1 ${isHovered ? 'flex' : 'hidden'}`}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
@@ -697,7 +920,7 @@ const TaskDetail = () => {
               </div>
             </div>
           </td>
-          <td style={{ width: columnWidths.description }} className="px-2 py-2">
+          <td style={getColumnStyle('description')} className="px-2 py-2">
             {isEditingDescription ? (
               <textarea
                 autoFocus
@@ -726,12 +949,12 @@ const TaskDetail = () => {
               </div>
             )}
           </td>
-          <td style={{ width: columnWidths.status }} className="px-2 py-2 whitespace-nowrap">
+          <td style={getColumnStyle('status')} className="px-2 py-2 whitespace-nowrap">
             <select
               value={task.statusId || ''}
               onChange={(e) => handleStatusChange(task.id, e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              className="text-xs border border-gray-200 rounded px-1.5 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 hover:border-gray-300"
+              className="text-xs border border-gray-200 rounded px-1.5 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 hover:border-gray-300 w-full"
               style={task.status ? { backgroundColor: task.status.color + '20', color: task.status.color } : {}}
             >
               <option value="">Status</option>
@@ -740,14 +963,16 @@ const TaskDetail = () => {
               ))}
             </select>
           </td>
-          <td style={{ width: columnWidths.assignee }} className="px-2 py-2">
-            <AssigneeSelector
-              task={task}
-              users={users}
-              onUpdate={handleAssigneesChange}
-            />
+          <td style={getColumnStyle('assignee')} className="px-2 py-2 overflow-hidden">
+            <div className="min-w-0">
+              <AssigneeSelector
+                task={task}
+                users={users}
+                onUpdate={handleAssigneesChange}
+              />
+            </div>
           </td>
-          <td style={{ width: columnWidths.updatedAt }} className="px-2 py-2">
+          <td style={getColumnStyle('updatedAt')} className="px-2 py-2">
             <TaskActivityTooltip taskId={task.id}>
               <div className="flex items-center gap-1.5 cursor-pointer group">
                 <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-blue-50 to-indigo-100 group-hover:from-blue-100 group-hover:to-indigo-200 transition-all duration-200 shadow-sm">
@@ -755,32 +980,32 @@ const TaskDetail = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-medium text-gray-700 group-hover:text-indigo-700 transition-colors">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-medium text-gray-700 group-hover:text-indigo-700 transition-colors truncate">
                     {formatRelativeTime(task.updatedAt)}
                   </span>
                 </div>
-                <svg className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
             </TaskActivityTooltip>
           </td>
-          <td style={{ width: columnWidths.startDate }} className="px-2 py-2 whitespace-nowrap">
+          <td style={getColumnStyle('startDate')} className="px-2 py-2 whitespace-nowrap">
             <InlineDatePicker
               value={task.startAt}
               onChange={(value) => handleDateChange(task.id, 'startAt', value)}
               placeholder="Başlama"
             />
           </td>
-          <td style={{ width: columnWidths.endDate }} className="px-2 py-2 whitespace-nowrap">
+          <td style={getColumnStyle('endDate')} className="px-2 py-2 whitespace-nowrap">
             <InlineDatePicker
               value={task.dueAt}
               onChange={(value) => handleDateChange(task.id, 'dueAt', value)}
               placeholder="Bitmə"
             />
           </td>
-          <td style={{ width: columnWidths.link }} className="px-2 py-2">
+          <td style={getColumnStyle('link')} className="px-2 py-2">
             {isEditingLink ? (
               <input
                 type="url"
@@ -803,7 +1028,7 @@ const TaskDetail = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-xs text-blue-600 hover:underline truncate block max-w-[120px]"
+                    className="text-xs text-blue-600 hover:underline truncate block"
                   >
                     {task.link}
                   </a>
@@ -813,7 +1038,7 @@ const TaskDetail = () => {
               </div>
             )}
           </td>
-          <td style={{ width: columnWidths.doc }} className="px-2 py-2">
+          <td style={getColumnStyle('doc')} className="px-2 py-2">
             {editingField?.taskId === task.id && editingField?.field === 'doc' ? (
               <textarea
                 value={editingValue}
@@ -843,7 +1068,7 @@ const TaskDetail = () => {
               </div>
             )}
           </td>
-          <td style={{ width: columnWidths.meetingNotes }} className="px-2 py-2">
+          <td style={getColumnStyle('meetingNotes')} className="px-2 py-2">
             {editingField?.taskId === task.id && editingField?.field === 'meetingNotes' ? (
               <textarea
                 value={editingValue}
@@ -919,6 +1144,16 @@ const TaskDetail = () => {
               ) : (
                 <div className="w-5" />
               )}
+              <input
+                type="checkbox"
+                checked={selectedTasks.has(task.id)}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  handleTaskSelect(task.id, e.target.checked)
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+              />
             </div>
             <div className="flex-1 min-w-0">
               <h3
@@ -1181,12 +1416,67 @@ const TaskDetail = () => {
         </div>
       ) : (
         <>
+          {/* Bulk Actions Toolbar */}
+          {selectedTasks.size > 0 && (
+            <div className="hidden md:flex items-center gap-3 mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium text-gray-700">
+                {selectedTasks.size} tapşırıq seçildi
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={handleBulkArchive}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                  Arxivlə
+                </button>
+                <button
+                  onClick={handleBulkCopy}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Kopyala
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Sil
+                </button>
+                <button
+                  onClick={() => setSelectedTasks(new Set())}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Ləğv et
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Desktop Table View */}
           <div className={`hidden md:block bg-white rounded-lg border border-gray-200 overflow-x-auto overflow-y-visible ${resizing ? 'select-none' : ''}`}>
-            <table ref={tableRef} className="table-fixed" style={{ minWidth: `${totalTableWidth}px` }}>
+            <table ref={tableRef} className="table-auto" style={{ width: `${totalTableWidth}px`, tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th style={{ width: columnWidths.checkbox }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                  <th style={getColumnStyle('checkbox')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        ref={(input) => {
+                          if (input) input.indeterminate = isIndeterminate
+                        }}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                      />
+                    </div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'checkbox')}
@@ -1194,8 +1484,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.title }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Başlıq
+                  <th style={getColumnStyle('title')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Başlıq</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'title')}
@@ -1203,8 +1493,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.description }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Açıqlama
+                  <th style={getColumnStyle('description')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Açıqlama</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'description')}
@@ -1212,8 +1502,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.status }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Status
+                  <th style={getColumnStyle('status')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Status</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'status')}
@@ -1221,8 +1511,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.assignee }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Təyin edilib
+                  <th style={getColumnStyle('assignee')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Təyin edilib</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'assignee')}
@@ -1230,8 +1520,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.updatedAt }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Son yenilənmə
+                  <th style={getColumnStyle('updatedAt')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Son yenilənmə</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'updatedAt')}
@@ -1239,8 +1529,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.startDate }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Başlama
+                  <th style={getColumnStyle('startDate')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Başlama</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'startDate')}
@@ -1248,8 +1538,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.endDate }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Bitmə
+                  <th style={getColumnStyle('endDate')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Bitmə</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'endDate')}
@@ -1257,8 +1547,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.link }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Link
+                  <th style={getColumnStyle('link')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Link</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'link')}
@@ -1266,8 +1556,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.doc }} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    Doc
+                  <th style={getColumnStyle('doc')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                    <div className="truncate">Doc</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'doc')}
@@ -1275,8 +1565,8 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={{ width: columnWidths.meetingNotes }} className="px-2 py-2 text-left text-xs font-medium text-gray-500">
-                    Meeting Notes
+                  <th style={getColumnStyle('meetingNotes')} className="px-2 py-2 text-left text-xs font-medium text-gray-500">
+                    <div className="truncate">Meeting Notes</div>
                   </th>
                 </tr>
               </thead>
@@ -1344,6 +1634,50 @@ const TaskDetail = () => {
 
           {/* Mobile Card View */}
           <div className="md:hidden">
+            {/* Bulk Actions Toolbar for Mobile */}
+            {selectedTasks.size > 0 && (
+              <div className="flex flex-col gap-3 mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-sm font-medium text-gray-700">
+                  {selectedTasks.size} tapşırıq seçildi
+                </span>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleBulkArchive}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    Arxivlə
+                  </button>
+                  <button
+                    onClick={handleBulkCopy}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Kopyala
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Sil
+                  </button>
+                  <button
+                    onClick={() => setSelectedTasks(new Set())}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Ləğv et
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               {rootTasks.map((task, index) => renderTaskCard(task, 0, index))}
             </div>
@@ -1432,6 +1766,7 @@ const TaskDetail = () => {
         tasks={tasks}
         createTask={createTask}
         updateTask={updateTask}
+        setExpandedTasks={setExpandedTasks}
       />
 
       {/* Task List Edit Modal */}
@@ -1505,20 +1840,21 @@ const AssigneeSelector = ({ task, users, onUpdate }) => {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <div
         ref={triggerRef}
         onClick={handleOpen}
-        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded -mx-2"
+        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded -mx-2 min-w-0"
       >
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 min-w-0">
           {task.assignees && task.assignees.length > 0 ? (
             task.assignees.map((assignee) => (
               <span
                 key={assignee.id}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700"
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 max-w-full"
+                title={assignee.username}
               >
-                {assignee.username}
+                <span className="truncate">{assignee.username}</span>
               </span>
             ))
           ) : (
@@ -1562,6 +1898,7 @@ const TaskFormModal = ({
   tasks = [],
   createTask,
   updateTask,
+  setExpandedTasks,
 }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -1671,7 +2008,23 @@ const TaskFormModal = ({
         await updateTask({ id: task.id, ...payload }).unwrap()
         toast.success('Tapşırıq yeniləndi!')
       } else {
-        await createTask(payload).unwrap()
+        // Parent task varsa, onu açıq saxla
+        if (payload.parentId) {
+          setExpandedTasks(prev => {
+            const newSet = new Set(prev)
+            newSet.add(payload.parentId)
+            return newSet
+          })
+        }
+        const newTask = await createTask(payload).unwrap()
+        // Yeni task-ı da avtomatik aç
+        if (newTask?.id && setExpandedTasks) {
+          setExpandedTasks(prev => {
+            const newSet = new Set(prev)
+            newSet.add(newTask.id)
+            return newSet
+          })
+        }
         toast.success('Tapşırıq yaradıldı!')
       }
       onClose()
