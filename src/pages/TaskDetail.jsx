@@ -806,14 +806,14 @@ const TaskDetail = () => {
           } ${dropIndicatorClass}`}
         >
           <td style={getColumnStyle('checkbox')} className="px-2 py-2">
-            <div className="flex items-center gap-1" style={{ paddingLeft: `${indent}px` }}>
+            <div className="flex items-center gap-2">
               {hasChildren ? (
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     toggleTask(task.id)
                   }}
-                  className="p-0.5 hover:bg-gray-200 rounded transition-colors"
+                  className="p-0.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
                   title={isExpanded ? 'Bağla' : 'Aç'}
                 >
                   <svg
@@ -826,7 +826,7 @@ const TaskDetail = () => {
                   </svg>
                 </button>
               ) : (
-                <div className="w-4" />
+                <div className="w-4 flex-shrink-0" />
               )}
               <input
                 type="checkbox"
@@ -836,12 +836,12 @@ const TaskDetail = () => {
                   handleTaskSelect(task.id, e.target.checked)
                 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
               />
             </div>
           </td>
           <td style={getColumnStyle('title')} className="px-2 py-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" style={{ paddingLeft: `${indent}px` }}>
               <div className="flex-1 min-w-0">
                 {isEditingTitle ? (
                   <input
@@ -1099,6 +1099,51 @@ const TaskDetail = () => {
             )}
           </td>
         </tr>
+        {/* Sub-task input row - shows when adding sub-task to this task */}
+        {isAddingTask && parentTaskId === task.id && (
+          <tr className="bg-blue-50 border-b border-blue-200">
+            <td colSpan={11} className="px-4 py-3">
+              <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="flex items-center gap-2" style={{ marginLeft: `${(depth + 1) * 20}px` }}>
+                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+                <input
+                  ref={newTaskInputRef}
+                  type="text"
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="Sub-task adı..."
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setIsAddingTask(false)
+                      setNewTaskTitle('')
+                      setParentTaskId(null)
+                    }
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!newTaskTitle.trim()}
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  Əlavə et
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingTask(false)
+                    setNewTaskTitle('')
+                    setParentTaskId(null)
+                  }}
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Ləğv et
+                </button>
+              </form>
+            </td>
+          </tr>
+        )}
         {hasChildren && isExpanded && task.children.map((child, idx) => renderTaskRow(child, depth + 1, idx))}
       </>
     )
@@ -1575,61 +1620,58 @@ const TaskDetail = () => {
               </tbody>
             </table>
 
-            {/* Add Task Row */}
-            <div className="border-t border-gray-200 px-4 py-3">
-              {isAddingTask ? (
-                <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="flex items-center gap-2" style={{ marginLeft: parentTaskId ? '40px' : '0' }}>
-                  {parentTaskId && (
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                    </svg>
-                  )}
-                  <input
-                    ref={newTaskInputRef}
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder={parentTaskId ? "Sub-task adı..." : "Tapşırıq adı..."}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
+            {/* Add Task Row - only show when not adding sub-task */}
+            {!parentTaskId && (
+              <div className="border-t border-gray-200 px-4 py-3">
+                {isAddingTask ? (
+                  <form onSubmit={(e) => handleQuickCreate(e, null)} className="flex items-center gap-2">
+                    <input
+                      ref={newTaskInputRef}
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      placeholder="Tapşırıq adı..."
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setIsAddingTask(false)
+                          setNewTaskTitle('')
+                          setParentTaskId(null)
+                        }
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newTaskTitle.trim()}
+                      className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Əlavə et
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
                         setIsAddingTask(false)
                         setNewTaskTitle('')
                         setParentTaskId(null)
-                      }
-                    }}
-                  />
+                      }}
+                      className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      Ləğv et
+                    </button>
+                  </form>
+                ) : (
                   <button
-                    type="submit"
-                    disabled={!newTaskTitle.trim()}
-                    className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setIsAddingTask(true)}
+                    className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
                   >
-                    Əlavə et
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Tapşırıq əlavə et</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddingTask(false)
-                      setNewTaskTitle('')
-                      setParentTaskId(null)
-                    }}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    Ləğv et
-                  </button>
-                </form>
-              ) : (
-                <button
-                  onClick={() => setIsAddingTask(true)}
-                  className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>Tapşırıq əlavə et</span>
-                </button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Mobile Card View */}
