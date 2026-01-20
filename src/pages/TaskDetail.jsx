@@ -33,6 +33,9 @@ const TaskDetail = () => {
   const [draggedTask, setDraggedTask] = useState(null)
   const [expandedTasks, setExpandedTasks] = useState(new Set())
   const [hoveredTaskId, setHoveredTaskId] = useState(null)
+  const [actionMenuPosition, setActionMenuPosition] = useState(null)
+  const hoverTimeoutRef = useRef(null)
+  const actionMenuRef = useRef(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [editingField, setEditingField] = useState(null) // {taskId, field}
@@ -377,12 +380,65 @@ const TaskDetail = () => {
     }
   }
 
+  // Hover handlers with delay for action buttons
+  const handleTaskMouseEnter = (e, taskId, task, indent) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    setHoveredTaskId(taskId)
+    // Pozisiyanı hesabla - title td-nin rect-ini tap
+    const tr = e.currentTarget
+    const titleTd = tr.querySelector('td:nth-child(2)')
+    if (titleTd) {
+      const tdRect = titleTd.getBoundingClientRect()
+      const titleDiv = titleTd.querySelector('.flex-1')
+      const titleWidth = titleDiv ? titleDiv.getBoundingClientRect().width : 0
+      const actionMenuWidth = task.parentId ? 120 : 90 // Təxmini genişlik
+      const availableSpace = tdRect.right - tdRect.left - indent - titleWidth - 20
+      const showInline = availableSpace >= actionMenuWidth
+
+      setActionMenuPosition({
+        top: tdRect.bottom + 2,
+        left: tdRect.left + indent + 8,
+        task,
+        indent,
+        showInline,
+        inlineRight: tdRect.right - 8,
+        inlineTop: tdRect.top + (tdRect.height / 2)
+      })
+    }
+  }
+
+  const handleTaskMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredTaskId(null)
+      setActionMenuPosition(null)
+    }, 200) // 200ms delay
+  }
+
+  const handleActionMenuMouseEnter = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+  }
+
+  const handleActionMenuMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredTaskId(null)
+      setActionMenuPosition(null)
+    }, 200)
+  }
+
   // Drag and Drop handlers
   const [dropTarget, setDropTarget] = useState(null) // { taskId, type: 'above' | 'below' | 'inside' }
 
   const handleDragStart = (e, task, index) => {
     setDraggedTask({ task, index })
     e.dataTransfer.effectAllowed = 'move'
+    // Sidebar-a drag üçün task məlumatını əlavə et
+    e.dataTransfer.setData('application/task', JSON.stringify({ type: 'task', task: { id: task.id, title: task.title } }))
   }
 
   const handleDragOver = (e, targetTask) => {
@@ -799,14 +855,24 @@ const TaskDetail = () => {
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, task, index)}
           onDragEnd={handleDragEnd}
-          onMouseEnter={() => setHoveredTaskId(task.id)}
-          onMouseLeave={() => setHoveredTaskId(null)}
+          onMouseEnter={(e) => handleTaskMouseEnter(e, task.id, task, indent)}
+          onMouseLeave={handleTaskMouseLeave}
           className={`hover:bg-gray-50 transition-colors cursor-move border-b border-gray-200 ${
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           } ${dropIndicatorClass}`}
         >
           <td style={getColumnStyle('checkbox')} className="px-2 py-2">
             <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selectedTasks.has(task.id)}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  handleTaskSelect(task.id, e.target.checked)
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              />
               {hasChildren ? (
                 <button
                   onClick={(e) => {
@@ -828,23 +894,13 @@ const TaskDetail = () => {
               ) : (
                 <div className="w-4 flex-shrink-0" />
               )}
-              <input
-                type="checkbox"
-                checked={selectedTasks.has(task.id)}
-                onChange={(e) => {
-                  e.stopPropagation()
-                  handleTaskSelect(task.id, e.target.checked)
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
-              />
             </div>
           </td>
-          <td style={getColumnStyle('title')} className="px-2 py-2">
+          <td style={getColumnStyle('title')} className="px-2 py-2 relative">
             <div className="flex items-center gap-2" style={{ paddingLeft: `${indent}px` }}>
               {/* Sub-task indicator */}
               {depth > 0 && (
-                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               )}
@@ -861,68 +917,12 @@ const TaskDetail = () => {
                   />
                 ) : (
                   <div
-                    onClick={() => startEditing(task.id, 'title', task.title)}
-                    className="cursor-text hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5"
+                    onClick={() => handleOpenModal(task)}
+                    className="cursor-pointer hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5 truncate"
                   >
-                    <div className="text-sm font-medium text-gray-900 wrap-break-word">{task.title}</div>
+                    <span className="text-sm font-medium text-gray-900 hover:text-blue-600">{task.title}</span>
                   </div>
                 )}
-              </div>
-              {/* Action buttons - Sub-task, Edit, Delete */}
-              <div className={`flex-shrink-0 flex items-center gap-1 ${isHovered ? 'flex' : 'hidden'}`}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setParentTaskId(task.id)
-                    setIsAddingTask(true)
-                  }}
-                  className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded text-blue-600 bg-blue-50 hover:bg-blue-100"
-                  title="Sub-task əlavə et"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>Sub-task</span>
-                </button>
-                {task.parentId && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleMakeRootTask(task.id)
-                    }}
-                    className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded text-orange-600 bg-orange-50 hover:bg-orange-100"
-                    title="Əsas tapşırığa çevir"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
-                    <span>Root</span>
-                  </button>
-                )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleOpenModal(task)
-                  }}
-                  className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"
-                  title="Redaktə et"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleDelete(task.id)
-                  }}
-                  className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
-                  title="Sil"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
               </div>
             </div>
           </td>
@@ -1297,8 +1297,92 @@ const TaskDetail = () => {
     )
   }
 
+  // Action menu portal component
+  const ActionMenuPortal = () => {
+    if (!actionMenuPosition || !hoveredTaskId) return null
+    const task = actionMenuPosition.task
+    const { showInline, inlineRight, inlineTop, top, left } = actionMenuPosition
+
+    // Inline göstəriləcəksə - sağda, deyilsə - altda
+    const style = showInline
+      ? { top: inlineTop, left: inlineRight, transform: 'translate(-100%, -50%)' }
+      : { top, left }
+
+    return createPortal(
+      <div
+        ref={actionMenuRef}
+        className={`fixed flex items-center gap-0.5 bg-white shadow-lg rounded-md px-1 py-0.5 z-50 border border-gray-200`}
+        style={style}
+        onMouseEnter={handleActionMenuMouseEnter}
+        onMouseLeave={handleActionMenuMouseLeave}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setParentTaskId(task.id)
+            setIsAddingTask(true)
+            setHoveredTaskId(null)
+            setActionMenuPosition(null)
+          }}
+          className="p-1 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+          title="Sub-task əlavə et"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+        {task.parentId && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleMakeRootTask(task.id)
+              setHoveredTaskId(null)
+              setActionMenuPosition(null)
+            }}
+            className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-50"
+            title="Əsas tapşırığa çevir"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            startEditing(task.id, 'title', task.title)
+            setHoveredTaskId(null)
+            setActionMenuPosition(null)
+          }}
+          className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+          title="Adını dəyiş"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDelete(task.id)
+            setHoveredTaskId(null)
+            setActionMenuPosition(null)
+          }}
+          className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+          title="Sil"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>,
+      document.body
+    )
+  }
+
   return (
     <>
+      <ActionMenuPortal />
       <div className="p-4 md:p-6">
       {/* Header */}
       <div className="mb-4 md:mb-6">

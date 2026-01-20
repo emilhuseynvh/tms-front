@@ -20,6 +20,7 @@ import {
   useArchiveSpaceMutation,
   useArchiveFolderMutation,
   useArchiveListMutation,
+  useUpdateTaskMutation,
   adminApi
 } from '../services/adminApi'
 import { useVerifyQuery, authApi } from '../services/authApi'
@@ -61,6 +62,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [moveFolder] = useMoveFolderMutation()
   const [reorderTaskLists] = useReorderTaskListsMutation()
   const [moveTaskList] = useMoveTaskListMutation()
+  const [updateTask] = useUpdateTaskMutation()
 
   const [draggedItem, setDraggedItem] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
@@ -85,6 +87,13 @@ const Sidebar = ({ isOpen, onClose }) => {
     e.preventDefault()
     e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
+
+    // TaskDetail-dən task drag edilir?
+    const hasTaskData = e.dataTransfer.types.includes('application/task')
+    if (hasTaskData && type === 'list') {
+      setDropTarget({ type, item, parentInfo, position: 'inside' })
+      return
+    }
 
     // Drop target-i yalnız fərqli item üçün göstər
     if (!draggedItem) return
@@ -113,6 +122,25 @@ const Sidebar = ({ isOpen, onClose }) => {
   const handleDrop = async (e, targetType, targetItem, targetParentInfo = null) => {
     e.preventDefault()
     e.stopPropagation()
+
+    // TaskDetail-dən task drop edilib?
+    const taskData = e.dataTransfer.getData('application/task')
+    if (taskData && targetType === 'list') {
+      try {
+        const { task } = JSON.parse(taskData)
+        await updateTask({
+          id: task.id,
+          taskListId: targetItem.id
+        }).unwrap()
+        toast.success(`"${task.title}" tapşırığı köçürüldü!`)
+        // RTK Query cache-ni invalidate et
+        dispatch(adminApi.util.invalidateTags(['Tasks', 'TaskLists']))
+      } catch (error) {
+        toast.error(error?.data?.message || 'Xəta baş verdi!')
+      }
+      handleDragEnd()
+      return
+    }
 
     if (!draggedItem) return
 
@@ -265,6 +293,9 @@ const Sidebar = ({ isOpen, onClose }) => {
   // Drop indicator class-ını al
   const getDropIndicatorClass = (type, itemId) => {
     if (dropTarget?.type !== type || dropTarget?.item?.id !== itemId) return ''
+    if (dropTarget.position === 'inside') {
+      return 'bg-blue-100 ring-2 ring-blue-500 ring-inset'
+    }
     return dropTarget.position === 'above'
       ? 'border-t-2 border-t-blue-500'
       : 'border-b-2 border-b-blue-500'
@@ -540,7 +571,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 {/* Search Input with Add Button */}
                 <div className="px-2 flex gap-1">
                   <input
-                    type="text"
+                    type="search"
                     placeholder="Sahə axtar..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1055,10 +1086,10 @@ const SpaceItem = ({
                   <div
                     draggable
                     onDragStart={(e) => onDragStart(e, 'list', list, { spaceId: space.id, folderId: null })}
-                    onDragOver={(e) => canDropList && onDragOver(e, 'list', list, { spaceId: space.id, folderId: null })}
+                    onDragOver={(e) => onDragOver(e, 'list', list, { spaceId: space.id, folderId: null })}
                     onDragLeave={onDragLeave}
                     onDragEnd={onDragEnd}
-                    onDrop={(e) => canDropList && onDrop(e, 'list', list, { spaceId: space.id, folderId: null })}
+                    onDrop={(e) => onDrop(e, 'list', list, { spaceId: space.id, folderId: null })}
                     onClick={() => editingListId !== list.id && onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
                     className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-pointer ${
                       getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === null
@@ -1488,10 +1519,10 @@ const FolderItem = ({
                   <div
                     draggable
                     onDragStart={(e) => onDragStart(e, 'list', list, { folderId: folder.id, spaceId: null })}
-                    onDragOver={(e) => canDropList && onDragOver(e, 'list', list, { folderId: folder.id, spaceId: null })}
+                    onDragOver={(e) => onDragOver(e, 'list', list, { folderId: folder.id, spaceId: null })}
                     onDragLeave={onDragLeave}
                     onDragEnd={onDragEnd}
-                    onDrop={(e) => canDropList && onDrop(e, 'list', list, { folderId: folder.id, spaceId: null })}
+                    onDrop={(e) => onDrop(e, 'list', list, { folderId: folder.id, spaceId: null })}
                     onClick={() => editingListId !== list.id && onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
                     className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer ${
                       getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === folder.id
