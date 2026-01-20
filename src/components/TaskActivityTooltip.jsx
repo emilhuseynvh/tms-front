@@ -44,6 +44,9 @@ const formatDate = (dateString) => {
 }
 
 const getChangeLabel = (key, isFirstTime = false) => {
+  if (key === 'created') {
+    return 'Tapşırıq yaradıldı'
+  }
   if (isFirstTime) {
     const addLabels = {
       title: 'Başlıq əlavə edildi',
@@ -75,6 +78,7 @@ const getChangeLabel = (key, isFirstTime = false) => {
 
 const getChangeIcon = (key) => {
   const icons = {
+    created: '🆕',
     title: '✏️',
     description: '📝',
     startAt: '📅',
@@ -146,6 +150,11 @@ const TaskActivityTooltip = ({ taskId, children }) => {
   }
 
   const formatDetailedChange = (key, value) => {
+    // Task yaratma loqu
+    if (key === 'created') {
+      return [{ type: 'added', text: value?.to || 'Tapşırıq yaradıldı' }]
+    }
+
     if (key === 'assignees' && typeof value === 'object' && value.from !== undefined) {
       const { added, removed } = getAssigneeChanges(value.from, value.to)
       const parts = []

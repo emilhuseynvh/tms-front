@@ -141,6 +141,7 @@ const ActivityLogs = () => {
 
   const getChangeLabel = (key) => {
     const labels = {
+      created: 'Tapşırıq yaradıldı',
       title: 'Başlıq dəyişdirildi',
       description: 'Açıqlama dəyişdirildi',
       startAt: 'Başlama tarixi',
@@ -159,6 +160,7 @@ const ActivityLogs = () => {
 
   const getChangeIcon = (key) => {
     const icons = {
+      created: '🆕',
       title: '✏️',
       description: '📝',
       startAt: '📅',
@@ -202,6 +204,11 @@ const ActivityLogs = () => {
   const formatDetailedChange = (key, value) => {
     // value null və ya undefined olduqda return null
     if (value === null || value === undefined) return null
+
+    // Task yaratma loqu
+    if (key === 'created') {
+      return [{ type: 'added', text: value?.to || 'Tapşırıq yaradıldı' }]
+    }
 
     if (key === 'assignees' && typeof value === 'object' && value?.from !== undefined) {
       const { added, removed } = getAssigneeChanges(value.from, value.to)

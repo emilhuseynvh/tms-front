@@ -163,7 +163,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: folderData,
       }),
-      invalidatesTags: ['Folders', 'ActivityLogs'],
+      invalidatesTags: ['Folders', 'Spaces', 'ActivityLogs'],
     }),
 
     // Update folder
@@ -236,7 +236,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskListData,
       }),
-      invalidatesTags: ['TaskLists', 'ActivityLogs'],
+      invalidatesTags: ['TaskLists', 'Spaces', 'Folders', 'ActivityLogs'],
     }),
 
     // Update task list

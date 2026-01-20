@@ -28,6 +28,17 @@ import Modal from './Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import { disconnectSocket } from '../hooks/useWebSocket'
 
+// Path-dan list ID və folder ID-ni çıxarır
+const getListIdFromPath = (pathname) => {
+  const match = pathname.match(/\/list\/(\d+)/)
+  return match ? parseInt(match[1], 10) : null
+}
+
+const getFolderIdFromPath = (pathname) => {
+  const match = pathname.match(/\/folder\/(\d+)/)
+  return match ? parseInt(match[1], 10) : null
+}
+
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -79,7 +90,13 @@ const Sidebar = ({ isOpen, onClose }) => {
     if (!draggedItem) return
     if (draggedItem.type === type && draggedItem.item.id === item.id) return
 
-    setDropTarget({ type, item, parentInfo })
+    // Mouse pozisiyasına görə above/below təyin et
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const height = rect.height
+    const position = y < height / 2 ? 'above' : 'below'
+
+    setDropTarget({ type, item, parentInfo, position })
   }
 
   // Drag leave - sahəni tərk edəndə
@@ -112,9 +129,12 @@ const Sidebar = ({ isOpen, onClose }) => {
       if (sourceType === 'space' && targetType === 'space') {
         const spaceIds = spaces.map(s => s.id)
         const fromIndex = spaceIds.indexOf(sourceItem.id)
-        const toIndex = spaceIds.indexOf(targetItem.id)
+        let toIndex = spaceIds.indexOf(targetItem.id)
         if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
           spaceIds.splice(fromIndex, 1)
+          // Position-a görə düzəlt
+          if (fromIndex < toIndex) toIndex--
+          if (dropTarget?.position === 'below') toIndex++
           spaceIds.splice(toIndex, 0, sourceItem.id)
           await reorderSpaces(spaceIds).unwrap()
         }
@@ -131,9 +151,12 @@ const Sidebar = ({ isOpen, onClose }) => {
           if (space?.folders) {
             const folderIds = space.folders.map(f => f.id)
             const fromIndex = folderIds.indexOf(sourceItem.id)
-            const toIndex = folderIds.indexOf(targetItem.id)
+            let toIndex = folderIds.indexOf(targetItem.id)
             if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
               folderIds.splice(fromIndex, 1)
+              // Position-a görə düzəlt
+              if (fromIndex < toIndex) toIndex--
+              if (dropTarget?.position === 'below') toIndex++
               folderIds.splice(toIndex, 0, sourceItem.id)
               await reorderFolders({ spaceId: sourceSpaceId, folderIds }).unwrap()
             }
@@ -179,10 +202,13 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           const listIds = lists.map(l => l.id)
           const fromIndex = listIds.indexOf(sourceItem.id)
-          const toIndex = listIds.indexOf(targetItem.id)
+          let toIndex = listIds.indexOf(targetItem.id)
 
           if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
             listIds.splice(fromIndex, 1)
+            // Position-a görə düzəlt
+            if (fromIndex < toIndex) toIndex--
+            if (dropTarget?.position === 'below') toIndex++
             listIds.splice(toIndex, 0, sourceItem.id)
             await reorderTaskLists(listIds).unwrap()
           }
@@ -234,6 +260,14 @@ const Sidebar = ({ isOpen, onClose }) => {
   // Drop target olub-olmadığını yoxla
   const isDropTarget = (type, itemId) => {
     return dropTarget?.type === type && dropTarget?.item?.id === itemId
+  }
+
+  // Drop indicator class-ını al
+  const getDropIndicatorClass = (type, itemId) => {
+    if (dropTarget?.type !== type || dropTarget?.item?.id !== itemId) return ''
+    return dropTarget.position === 'above'
+      ? 'border-t-2 border-t-blue-500'
+      : 'border-b-2 border-b-blue-500'
   }
 
   // Login olduqda bütün space-ləri açıq şəkildə göstər
@@ -555,6 +589,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         onDragEnd={handleDragEnd}
                         onDrop={handleDrop}
                         isDropTarget={isDropTarget}
+                        getDropIndicatorClass={getDropIndicatorClass}
                       />
                     ))
                   )}
@@ -618,6 +653,7 @@ const SpaceItem = ({
   onDragEnd,
   onDrop,
   isDropTarget,
+  getDropIndicatorClass,
 }) => {
   const folders = space.folders || []
   const directLists = space.taskLists || []
@@ -871,15 +907,21 @@ const SpaceItem = ({
         onDragLeave={onDragLeave}
         onDragEnd={onDragEnd}
         onDrop={(e) => canDropHere && onDrop(e, 'space', space, null)}
-        className={`group flex items-center gap-1 px-2 py-2 rounded-md text-sm transition-colors cursor-grab ${
+        onClick={() => {
+          if (!isEditingSpace) {
+            onExpand(space.id)
+            onNavigate(`/tasks/space/${space.id}`)
+          }
+        }}
+        className={`group flex items-center gap-1 px-2 py-2 rounded-md text-sm transition-colors cursor-pointer ${
           isActive
             ? 'bg-blue-200 text-blue-900 font-medium'
             : 'text-blue-800 hover:bg-blue-100'
-        } ${isCurrentDropTarget && !isDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+        } ${isCurrentDropTarget && !isDragging ? getDropIndicatorClass('space', space.id) : ''}`}
       >
         {/* Ox buttonu */}
         <button
-          onClick={(e) => onToggle(space.id, e)}
+          onClick={(e) => { e.stopPropagation(); onToggle(space.id, e) }}
           className="p-0.5 hover:bg-blue-300 rounded transition-all duration-200"
           title={isExpanded ? 'Bağla' : 'Aç'}
         >
@@ -896,14 +938,10 @@ const SpaceItem = ({
         {/* Space adı */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <svg
-            className="w-4 h-4 shrink-0 text-purple-600 cursor-pointer"
+            className="w-4 h-4 shrink-0 text-purple-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            onClick={() => {
-              onExpand(space.id)
-              onNavigate(`/tasks/space/${space.id}`)
-            }}
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
@@ -919,20 +957,14 @@ const SpaceItem = ({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span
-              className="truncate cursor-pointer hover:text-blue-600"
-              onClick={() => {
-                onExpand(space.id)
-                onNavigate(`/tasks/space/${space.id}`)
-              }}
-            >
+            <span className="truncate">
               {space.name}
             </span>
           )}
         </div>
 
         {isHovered && !isEditingSpace && (
-          <div className="flex gap-0.5 shrink-0">
+          <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleSpaceNameClick}
               className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
@@ -971,6 +1003,7 @@ const SpaceItem = ({
                   onDragEnd={onDragEnd}
                   onDrop={onDrop}
                   isDropTarget={isDropTarget}
+                  getDropIndicatorClass={getDropIndicatorClass}
                 />
               ))}
 
@@ -993,19 +1026,19 @@ const SpaceItem = ({
                     onDragLeave={onDragLeave}
                     onDragEnd={onDragEnd}
                     onDrop={(e) => canDropList && onDrop(e, 'list', list, { spaceId: space.id, folderId: null })}
-                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-grab ${
-                      location.pathname.includes(`/list/${list.id}`)
+                    onClick={() => editingListId !== list.id && onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
+                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-pointer ${
+                      getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === null
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                    } ${isListCurrentDropTarget && !isListDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+                    } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <svg
-                        className="w-4 h-4 shrink-0 text-gray-400 cursor-pointer"
+                        className="w-4 h-4 shrink-0 text-gray-400"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
-                        onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
@@ -1021,16 +1054,13 @@ const SpaceItem = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <span
-                          className="truncate cursor-pointer hover:text-blue-600"
-                          onClick={() => onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
-                        >
+                        <span className="truncate">
                           {list.name}
                         </span>
                       )}
                     </div>
                     {hoveredList === list.id && editingListId !== list.id && (
-                      <div className="flex gap-0.5 shrink-0">
+                      <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={(e) => handleListNameClick(e, list)}
                           className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
@@ -1134,6 +1164,7 @@ const FolderItem = ({
   onDragEnd,
   onDrop,
   isDropTarget,
+  getDropIndicatorClass,
 }) => {
   const taskLists = folder.taskLists || []
 
@@ -1289,15 +1320,16 @@ const FolderItem = ({
         onDragLeave={onDragLeave}
         onDragEnd={onDragEnd}
         onDrop={(e) => canDropHere && onDrop(e, 'folder', folder, spaceId)}
-        className={`group flex items-center gap-1.5 px-2 py-2 rounded-md text-sm transition-colors cursor-grab ${
+        onClick={() => !isEditingFolder && onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)}
+        className={`group flex items-center gap-1.5 px-2 py-2 rounded-md text-sm transition-colors cursor-pointer ${
           isActive
             ? 'bg-blue-100 text-blue-900 font-medium'
             : 'text-blue-800 hover:bg-blue-50'
-        } ${isFolderCurrentDropTarget && !isFolderDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+        } ${isFolderCurrentDropTarget && !isFolderDragging ? getDropIndicatorClass('folder', folder.id) : ''}`}
       >
         {/* Ox buttonu */}
         <button
-          onClick={(e) => onToggle(folder.id, e)}
+          onClick={(e) => { e.stopPropagation(); onToggle(folder.id, e) }}
           className="p-0.5 hover:bg-blue-200 rounded transition-all duration-200"
           title={isExpanded ? 'Bağla' : 'Aç'}
         >
@@ -1314,11 +1346,10 @@ const FolderItem = ({
         {/* Folder adı */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <svg
-            className="w-4 h-4 shrink-0 text-blue-600 cursor-pointer"
+            className="w-4 h-4 shrink-0 text-blue-600"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
-            onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)}
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>
@@ -1334,17 +1365,14 @@ const FolderItem = ({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span
-              className="truncate cursor-pointer hover:text-blue-600"
-              onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}`)}
-            >
+            <span className="truncate">
               {folder.name}
             </span>
           )}
         </div>
 
         {isHovered && !isEditingFolder && (
-          <div className="flex gap-0.5 shrink-0">
+          <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={handleFolderNameClick}
               className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
@@ -1393,19 +1421,19 @@ const FolderItem = ({
                     onDragLeave={onDragLeave}
                     onDragEnd={onDragEnd}
                     onDrop={(e) => canDropList && onDrop(e, 'list', list, { folderId: folder.id, spaceId: null })}
-                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-grab ${
-                      location.pathname.includes(`/list/${list.id}`)
+                    onClick={() => editingListId !== list.id && onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer ${
+                      getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === folder.id
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                    } ${isListCurrentDropTarget && !isListDragging ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}
+                    } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <svg
-                        className="w-4 h-4 shrink-0 text-gray-400 cursor-pointer"
+                        className="w-4 h-4 shrink-0 text-gray-400"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
-                        onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
@@ -1421,16 +1449,13 @@ const FolderItem = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <span
-                          className="truncate cursor-pointer hover:text-blue-600"
-                          onClick={() => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
-                        >
+                        <span className="truncate">
                           {list.name}
                         </span>
                       )}
                     </div>
                     {hoveredList === list.id && editingListId !== list.id && (
-                      <div className="flex gap-0.5 shrink-0">
+                      <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={(e) => handleListNameClick(e, list)}
                           className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
