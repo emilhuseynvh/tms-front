@@ -1319,7 +1319,32 @@ const TaskDetail = () => {
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-semibold text-gray-900">Tapşırıqlar</h1>
+              {/* Breadcrumb */}
+              <nav className="flex items-center text-sm md:text-base">
+                {(taskListData?.folder?.space || taskListData?.space) && (
+                  <>
+                    <span className="text-gray-500 font-medium">
+                      {taskListData?.folder?.space?.name || taskListData?.space?.name}
+                    </span>
+                    <svg className="w-4 h-4 mx-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </>
+                )}
+                {taskListData?.folder && (
+                  <>
+                    <span className="text-gray-500 font-medium">
+                      {taskListData.folder.name}
+                    </span>
+                    <svg className="w-4 h-4 mx-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </>
+                )}
+                <span className="text-gray-900 font-semibold">
+                  {taskListData?.name || 'Siyahı'}
+                </span>
+              </nav>
               <div className="flex gap-1">
                 <button
                   type="button"

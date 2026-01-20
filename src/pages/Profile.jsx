@@ -47,6 +47,22 @@ const Profile = () => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Validasiya
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    const maxSize = 25 * 1024 * 1024 // 25MB
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Yalnız JPG, PNG və WebP formatları dəstəklənir!')
+      e.target.value = ''
+      return
+    }
+
+    if (file.size > maxSize) {
+      toast.error('Şəkil ölçüsü 25MB-dan böyük ola bilməz!')
+      e.target.value = ''
+      return
+    }
+
     // Preview
     const reader = new FileReader()
     reader.onloadend = () => {
@@ -63,8 +79,17 @@ const Profile = () => {
       setFormData({ ...formData, avatarId: result.id })
       toast.success('Şəkil yükləndi!')
     } catch (error) {
-      toast.error(error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!')
+      const errorMessage = error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!'
+      // Backend error mesajlarını Azərbaycan dilinə çevir
+      if (errorMessage.includes('type is not correct') || errorMessage.includes('mime')) {
+        toast.error('Yalnız JPG, PNG və WebP formatları dəstəklənir!')
+      } else if (errorMessage.includes('size') || errorMessage.includes('large')) {
+        toast.error('Şəkil ölçüsü 25MB-dan böyük ola bilməz!')
+      } else {
+        toast.error(errorMessage)
+      }
       setAvatarPreview(currentUser?.avatar || null)
+      e.target.value = ''
     }
   }
 
@@ -114,7 +139,7 @@ const Profile = () => {
               <input
                 id="avatar"
                 type="file"
-                accept="image/*"
+                accept=".jpg,.jpeg,.png,.webp"
                 onChange={handleImageUpload}
                 className="hidden"
               />
@@ -129,8 +154,10 @@ const Profile = () => {
                   {currentUser?.role?.role || currentUser?.role || 'user'}
                 </span>
               </div>
-              {isUploading && (
+              {isUploading ? (
                 <p className="mt-2 text-xs text-blue-600">Şəkil yüklənir...</p>
+              ) : (
+                <p className="mt-2 text-xs text-gray-400">JPG, PNG, WebP (maks. 25MB)</p>
               )}
             </div>
           </div>

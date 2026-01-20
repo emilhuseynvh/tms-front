@@ -678,6 +678,25 @@ const SpaceItem = ({
   const [isDirectListModalOpen, setIsDirectListModalOpen] = useState(false)
   const [editingList, setEditingList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const addMenuRef = useRef(null)
+
+  // Click outside handler for add menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) {
+        setAddMenuOpen(false)
+      }
+    }
+
+    if (addMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [addMenuOpen])
+
   const [expandedFolders, setExpandedFolders] = useState(() => {
     // Başlanğıcda bütün folder-ləri açıq göstər
     const initial = {}
@@ -1108,7 +1127,7 @@ const SpaceItem = ({
               )})}
 
               {/* Əlavə et menu */}
-              <li className="relative">
+              <li className="relative" ref={addMenuRef}>
                 <button
                   onClick={() => setAddMenuOpen(!addMenuOpen)}
                   className="w-full text-left px-2 py-1.5 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2 mt-1"
