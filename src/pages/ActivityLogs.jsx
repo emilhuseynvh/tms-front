@@ -210,6 +210,23 @@ const ActivityLogs = () => {
       return [{ type: 'added', text: value?.to || 'Tapşırıq yaradıldı' }]
     }
 
+    // Assignees - { added: [...], removed: [...] } formatı (Space/Folder/List üçün)
+    if (key === 'assignees' && typeof value === 'object' && (value?.added !== undefined || value?.removed !== undefined)) {
+      const parts = []
+
+      if (value.added?.length > 0) {
+        const names = value.added.map(id => userMap[id] || `User #${id}`).join(', ')
+        parts.push({ type: 'added', text: `${names} təyin edildi` })
+      }
+      if (value.removed?.length > 0) {
+        const names = value.removed.map(id => userMap[id] || `User #${id}`).join(', ')
+        parts.push({ type: 'removed', text: `${names} təyinatdan çıxarıldı` })
+      }
+
+      return parts.length > 0 ? parts : null
+    }
+
+    // Assignees - { from: [...], to: [...] } formatı (Task üçün)
     if (key === 'assignees' && typeof value === 'object' && value?.from !== undefined) {
       const { added, removed } = getAssigneeChanges(value.from, value.to)
       const parts = []

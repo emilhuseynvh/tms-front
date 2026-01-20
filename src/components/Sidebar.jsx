@@ -702,12 +702,17 @@ const SpaceItem = ({
   }, [folders])
   const [hoveredFolder, setHoveredFolder] = useState(null)
   const [hoveredList, setHoveredList] = useState(null)
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
 
   // List inline edit states
   const [editingListId, setEditingListId] = useState(null)
   const [editListName, setEditListName] = useState('')
   const listInputRef = useRef(null)
+
+  // Space assignee modal state
+  const [isSpaceAssigneeModalOpen, setIsSpaceAssigneeModalOpen] = useState(false)
+
+  // List assignee modal state (for direct space lists)
+  const [assigneeListId, setAssigneeListId] = useState(null)
 
   const isActive = location.pathname.startsWith(`/tasks/space/${space.id}`)
 
@@ -792,7 +797,6 @@ const SpaceItem = ({
   const handleOpenFolderModal = (folder = null) => {
     setEditingFolder(folder)
     setIsFolderModalOpen(true)
-    setAddMenuOpen(false)
   }
 
   const handleCloseFolderModal = () => {
@@ -974,6 +978,15 @@ const SpaceItem = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
+            <button
+              onClick={() => setIsSpaceAssigneeModalOpen(true)}
+              className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+              title="İstifadəçiləri idarə et"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </button>
           </div>
         )}
       </div>
@@ -1070,48 +1083,40 @@ const SpaceItem = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
+                        <button
+                          onClick={() => setAssigneeListId(list.id)}
+                          className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+                          title="İstifadəçiləri idarə et"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                          </svg>
+                        </button>
                       </div>
                     )}
                   </div>
+                  {/* List Assignee Modal */}
+                  <AssigneeModal
+                    isOpen={assigneeListId === list.id}
+                    onClose={() => setAssigneeListId(null)}
+                    entity={list}
+                    entityType="list"
+                    onUpdate={updateTaskList}
+                  />
                 </li>
               )})}
 
-              {/* Əlavə et menu */}
-              <li className="relative">
+              {/* Siyahı əlavə et */}
+              <li>
                 <button
-                  onClick={() => setAddMenuOpen(!addMenuOpen)}
+                  onClick={() => setIsDirectListModalOpen(true)}
                   className="w-full text-left px-2 py-1.5 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2 mt-1"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span>Əlavə et</span>
+                  <span>Siyahı əlavə et</span>
                 </button>
-                {addMenuOpen && (
-                  <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
-                    <button
-                      onClick={() => handleOpenFolderModal()}
-                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                      Qovluq
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsDirectListModalOpen(true)
-                        setAddMenuOpen(false)
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                    >
-                      <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      Siyahı
-                    </button>
-                  </div>
-                )}
               </li>
         </ul>
       )}
@@ -1140,6 +1145,15 @@ const SpaceItem = ({
         isCreating={isCreatingList}
         isUpdating={isUpdatingList}
         onListCreated={(listId) => onNavigate(`/tasks/space/${space.id}/list/${listId}`)}
+      />
+
+      {/* Space Assignee Modal */}
+      <AssigneeModal
+        isOpen={isSpaceAssigneeModalOpen}
+        onClose={() => setIsSpaceAssigneeModalOpen(false)}
+        entity={space}
+        entityType="space"
+        onUpdate={onUpdateSpace}
       />
     </li>
   )
@@ -1186,6 +1200,12 @@ const FolderItem = ({
   const [editingListId, setEditingListId] = useState(null)
   const [editListName, setEditListName] = useState('')
   const listInputRef = useRef(null)
+
+  // Folder assignee modal state
+  const [isFolderAssigneeModalOpen, setIsFolderAssigneeModalOpen] = useState(false)
+
+  // List assignee modal state (for folder lists)
+  const [assigneeListId, setAssigneeListId] = useState(null)
 
   const isActive = location.pathname.includes(`/folder/${folder.id}`)
 
@@ -1382,6 +1402,15 @@ const FolderItem = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
+            <button
+              onClick={() => setIsFolderAssigneeModalOpen(true)}
+              className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+              title="İstifadəçiləri idarə et"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </button>
           </div>
         )}
       </div>
@@ -1465,9 +1494,26 @@ const FolderItem = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
+                        <button
+                          onClick={() => setAssigneeListId(list.id)}
+                          className="p-1 hover:bg-blue-100 hover:text-blue-600 rounded transition-colors"
+                          title="İstifadəçiləri idarə et"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                          </svg>
+                        </button>
                       </div>
                     )}
                   </div>
+                  {/* List Assignee Modal */}
+                  <AssigneeModal
+                    isOpen={assigneeListId === list.id}
+                    onClose={() => setAssigneeListId(null)}
+                    entity={list}
+                    entityType="list"
+                    onUpdate={updateTaskList}
+                  />
                 </li>
               )})}
               <li>
@@ -1497,6 +1543,15 @@ const FolderItem = ({
         isUpdating={isUpdatingList}
         onListCreated={(listId) => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${listId}`)}
       />
+
+      {/* Folder Assignee Modal */}
+      <AssigneeModal
+        isOpen={isFolderAssigneeModalOpen}
+        onClose={() => setIsFolderAssigneeModalOpen(false)}
+        entity={folder}
+        entityType="folder"
+        onUpdate={onUpdateFolder}
+      />
     </li>
   )
 }
@@ -1513,17 +1568,30 @@ const TaskListFormModal = ({
   isUpdating,
   onListCreated,
 }) => {
+  const { data: users = [] } = adminApi.useGetUsersQuery()
   const [name, setName] = useState('')
+  const [selectedAssignees, setSelectedAssignees] = useState([])
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
       if (list) {
         setName(list.name || '')
+        setSelectedAssignees(list.assignees?.map(a => a.id) || [])
       } else {
         setName('')
+        setSelectedAssignees([])
       }
     }
   }, [isOpen, list])
+
+  const toggleAssignee = (userId) => {
+    setSelectedAssignees(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -1531,11 +1599,11 @@ const TaskListFormModal = ({
 
     try {
       if (list) {
-        await updateTaskList({ id: list.id, name: name.trim() }).unwrap()
+        await updateTaskList({ id: list.id, name: name.trim(), assigneeIds: selectedAssignees }).unwrap()
         toast.success('Siyahı yeniləndi!')
         onClose()
       } else {
-        const payload = { name: name.trim() }
+        const payload = { name: name.trim(), assigneeIds: selectedAssignees }
         if (folderId) {
           payload.folderId = folderId
         } else if (spaceId) {
@@ -1575,6 +1643,63 @@ const TaskListFormModal = ({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            İstifadəçilər
+          </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+              className="w-full px-3 py-2 text-sm text-left border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              {selectedAssignees.length > 0
+                ? `${selectedAssignees.length} istifadəçi seçildi`
+                : 'İstifadəçi seçin...'}
+            </button>
+            {showAssigneeDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                {users.map(user => (
+                  <label
+                    key={user.id}
+                    className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAssignees.includes(user.id)}
+                      onChange={() => toggleAssignee(user.id)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">{user.name || user.email}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {selectedAssignees.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {selectedAssignees.map(userId => {
+                const user = users.find(u => u.id === userId)
+                return user ? (
+                  <span
+                    key={userId}
+                    className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                  >
+                    {user.name || user.email}
+                    <button
+                      type="button"
+                      onClick={() => toggleAssignee(userId)}
+                      className="ml-1 hover:text-blue-600"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : null
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-3 pt-2">
           <button
             type="button"
@@ -1607,10 +1732,13 @@ const FolderFormModal = ({
   isUpdating,
   onNavigate,
 }) => {
+  const { data: users = [] } = adminApi.useGetUsersQuery()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
   })
+  const [selectedAssignees, setSelectedAssignees] = useState([])
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -1619,11 +1747,13 @@ const FolderFormModal = ({
           name: folder.name || '',
           description: folder.description || '',
         })
+        setSelectedAssignees(folder.assignees?.map(a => a.id) || [])
       } else {
         setFormData({
           name: '',
           description: '',
         })
+        setSelectedAssignees([])
       }
     }
   }, [folder, isOpen])
@@ -1632,17 +1762,25 @@ const FolderFormModal = ({
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  const toggleAssignee = (userId) => {
+    setSelectedAssignees(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
     try {
       if (folder) {
         // Update
-        await updateFolder({ id: folder.id, ...formData }).unwrap()
+        await updateFolder({ id: folder.id, ...formData, assigneeIds: selectedAssignees }).unwrap()
         toast.success('Qovluq yeniləndi!')
       } else {
         // Create - navigate to default list after creation
-        const newFolder = await createFolder({ ...formData, spaceId }).unwrap()
+        const newFolder = await createFolder({ ...formData, spaceId, assigneeIds: selectedAssignees }).unwrap()
         console.log('New folder created:', newFolder)
         toast.success('Qovluq yaradıldı!')
 
@@ -1697,6 +1835,63 @@ const FolderFormModal = ({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            İstifadəçilər
+          </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+              className="w-full px-3 py-2 text-sm text-left border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              {selectedAssignees.length > 0
+                ? `${selectedAssignees.length} istifadəçi seçildi`
+                : 'İstifadəçi seçin...'}
+            </button>
+            {showAssigneeDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                {users.map(user => (
+                  <label
+                    key={user.id}
+                    className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAssignees.includes(user.id)}
+                      onChange={() => toggleAssignee(user.id)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">{user.name || user.email}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {selectedAssignees.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {selectedAssignees.map(userId => {
+                const user = users.find(u => u.id === userId)
+                return user ? (
+                  <span
+                    key={userId}
+                    className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                  >
+                    {user.name || user.email}
+                    <button
+                      type="button"
+                      onClick={() => toggleAssignee(userId)}
+                      className="ml-1 hover:text-blue-600"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : null
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-3 pt-4">
           <button
             type="button"
@@ -1730,10 +1925,13 @@ const SpaceFormModal = ({
   onNavigate,
 }) => {
   const [createFolder] = useCreateFolderMutation()
+  const { data: users = [] } = adminApi.useGetUsersQuery()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
   })
+  const [selectedAssignees, setSelectedAssignees] = useState([])
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -1742,11 +1940,13 @@ const SpaceFormModal = ({
           name: space.name || '',
           description: space.description || '',
         })
+        setSelectedAssignees(space.assignees?.map(a => a.id) || [])
       } else {
         setFormData({
           name: '',
           description: '',
         })
+        setSelectedAssignees([])
       }
     }
   }, [space, isOpen])
@@ -1755,17 +1955,25 @@ const SpaceFormModal = ({
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  const toggleAssignee = (userId) => {
+    setSelectedAssignees(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
     try {
       if (space) {
         // Update
-        await updateSpace({ id: space.id, ...formData }).unwrap()
+        await updateSpace({ id: space.id, ...formData, assigneeIds: selectedAssignees }).unwrap()
         toast.success('Sahə yeniləndi!')
       } else {
         // Create space
-        const newSpace = await createSpace(formData).unwrap()
+        const newSpace = await createSpace({ ...formData, assigneeIds: selectedAssignees }).unwrap()
 
         // Create default folder
         const newFolder = await createFolder({
@@ -1826,6 +2034,63 @@ const SpaceFormModal = ({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            İstifadəçilər
+          </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+              className="w-full px-3 py-2 text-sm text-left border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              {selectedAssignees.length > 0
+                ? `${selectedAssignees.length} istifadəçi seçildi`
+                : 'İstifadəçi seçin...'}
+            </button>
+            {showAssigneeDropdown && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                {users.map(user => (
+                  <label
+                    key={user.id}
+                    className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAssignees.includes(user.id)}
+                      onChange={() => toggleAssignee(user.id)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm">{user.name || user.email}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {selectedAssignees.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {selectedAssignees.map(userId => {
+                const user = users.find(u => u.id === userId)
+                return user ? (
+                  <span
+                    key={userId}
+                    className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                  >
+                    {user.name || user.email}
+                    <button
+                      type="button"
+                      onClick={() => toggleAssignee(userId)}
+                      className="ml-1 hover:text-blue-600"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : null
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-3 pt-4">
           <button
             type="button"
@@ -1840,6 +2105,129 @@ const SpaceFormModal = ({
             className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
             {isCreating || isUpdating ? 'Yüklənir...' : space ? 'Yenilə' : 'Yarat'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+const AssigneeModal = ({
+  isOpen,
+  onClose,
+  entity,
+  entityType, // 'space', 'folder', 'list'
+  onUpdate,
+}) => {
+  const { data: users = [] } = adminApi.useGetUsersQuery()
+  const [selectedAssignees, setSelectedAssignees] = useState([])
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const entityNames = {
+    space: 'Sahə',
+    folder: 'Qovluq',
+    list: 'Siyahı'
+  }
+
+  useEffect(() => {
+    if (isOpen && entity) {
+      setSelectedAssignees(entity.assignees?.map(a => a.id) || [])
+    }
+  }, [isOpen, entity])
+
+  const toggleAssignee = (userId) => {
+    setSelectedAssignees(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsUpdating(true)
+
+    try {
+      await onUpdate({ id: entity.id, assigneeIds: selectedAssignees }).unwrap()
+      toast.success('İstifadəçilər yeniləndi!')
+      onClose()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`${entityNames[entityType]} istifadəçiləri`}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            İstifadəçilər
+          </label>
+          {/* Scrollable user list - dropdown yerinə birbaşa siyahı */}
+          <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
+            {users.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-gray-500">İstifadəçi yoxdur</p>
+            ) : (
+              users.map(user => (
+                <label
+                  key={user.id}
+                  className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedAssignees.includes(user.id)}
+                    onChange={() => toggleAssignee(user.id)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{user.name || user.email}</span>
+                </label>
+              ))
+            )}
+          </div>
+          {selectedAssignees.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {selectedAssignees.map(userId => {
+                const user = users.find(u => u.id === userId)
+                return user ? (
+                  <span
+                    key={userId}
+                    className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                  >
+                    {user.name || user.email}
+                    <button
+                      type="button"
+                      onClick={() => toggleAssignee(userId)}
+                      className="ml-1 hover:text-blue-600"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : null
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          >
+            Ləğv et
+          </button>
+          <button
+            type="submit"
+            disabled={isUpdating}
+            className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-400 disabled:cursor-not-allowed"
+          >
+            {isUpdating ? 'Yüklənir...' : 'Yadda saxla'}
           </button>
         </div>
       </form>

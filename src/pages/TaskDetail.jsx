@@ -842,6 +842,12 @@ const TaskDetail = () => {
           </td>
           <td style={getColumnStyle('title')} className="px-2 py-2">
             <div className="flex items-center gap-2" style={{ paddingLeft: `${indent}px` }}>
+              {/* Sub-task indicator */}
+              {depth > 0 && (
+                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              )}
               <div className="flex-1 min-w-0">
                 {isEditingTitle ? (
                   <input
@@ -1103,7 +1109,7 @@ const TaskDetail = () => {
         {isAddingTask && parentTaskId === task.id && (
           <tr className="bg-blue-50 border-b border-blue-200">
             <td colSpan={11} className="px-4 py-3">
-              <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="flex items-center gap-2" style={{ marginLeft: `${(depth + 1) * 20}px` }}>
+              <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="flex items-center gap-2 max-w-xl" style={{ marginLeft: `${(depth + 1) * 20}px` }}>
                 <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                 </svg>
@@ -1113,7 +1119,7 @@ const TaskDetail = () => {
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   placeholder="Sub-task adı..."
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {
                       setIsAddingTask(false)
@@ -1125,7 +1131,7 @@ const TaskDetail = () => {
                 <button
                   type="submit"
                   disabled={!newTaskTitle.trim()}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                 >
                   Əlavə et
                 </button>
@@ -1136,7 +1142,7 @@ const TaskDetail = () => {
                     setNewTaskTitle('')
                     setParentTaskId(null)
                   }}
-                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0"
                 >
                   Ləğv et
                 </button>
@@ -1201,12 +1207,20 @@ const TaskDetail = () => {
               />
             </div>
             <div className="flex-1 min-w-0">
-              <h3
-                className="text-sm font-medium text-gray-900 mb-1 cursor-pointer hover:text-blue-600"
-                onClick={() => handleOpenModal(task)}
-              >
-                {task.title}
-              </h3>
+              <div className="flex items-center gap-1.5 mb-1">
+                {/* Sub-task indicator */}
+                {depth > 0 && (
+                  <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                )}
+                <h3
+                  className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600"
+                  onClick={() => handleOpenModal(task)}
+                >
+                  {task.title}
+                </h3>
+              </div>
               {task.description && (
                 <p className="text-xs text-gray-500 line-clamp-2 mb-3">{task.description}</p>
               )}
