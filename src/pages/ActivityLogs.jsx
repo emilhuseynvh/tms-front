@@ -200,7 +200,10 @@ const ActivityLogs = () => {
   }
 
   const formatDetailedChange = (key, value) => {
-    if (key === 'assignees' && typeof value === 'object' && value.from !== undefined) {
+    // value null və ya undefined olduqda return null
+    if (value === null || value === undefined) return null
+
+    if (key === 'assignees' && typeof value === 'object' && value?.from !== undefined) {
       const { added, removed } = getAssigneeChanges(value.from, value.to)
       const parts = []
 
@@ -220,14 +223,14 @@ const ActivityLogs = () => {
       return parts
     }
 
-    if (key === 'statusId' && typeof value === 'object' && value.from !== undefined) {
+    if (key === 'statusId' && typeof value === 'object' && value?.from !== undefined) {
       const fromName = statusMap[value.from] || 'Yoxdur'
       const toName = statusMap[value.to] || 'Yoxdur'
       return [{ type: 'change', from: fromName, to: toName }]
     }
 
     if (key === 'startAt' || key === 'dueAt') {
-      if (typeof value === 'object' && value.from !== undefined) {
+      if (typeof value === 'object' && value?.from !== undefined) {
         const fromDate = value.from ? formatDateValue(value.from) : 'Təyin edilməmişdi'
         const toDate = value.to ? formatDateValue(value.to) : 'Silindi'
 
@@ -242,7 +245,7 @@ const ActivityLogs = () => {
     }
 
     if (key === 'title' || key === 'description' || key === 'link' || key === 'name') {
-      if (typeof value === 'object' && value.from !== undefined) {
+      if (typeof value === 'object' && value?.from !== undefined) {
         const fromVal = value.from || 'Boş'
         const toVal = value.to || 'Boş'
 
@@ -256,9 +259,9 @@ const ActivityLogs = () => {
       }
     }
 
-    if (key === 'parentId' && typeof value === 'object') {
-      const fromName = value.from || null
-      const toName = value.to || null
+    if (key === 'parentId' && typeof value === 'object' && value !== null) {
+      const fromName = value?.from || null
+      const toName = value?.to || null
 
       if (!fromName && toName) {
         return [{ type: 'added', text: `"${toName}" tapşırığının alt tapşırığı oldu` }]
@@ -479,16 +482,16 @@ const ActivityLogs = () => {
                                       </div>
                                     ))}
                                   </div>
-                                ) : typeof value === 'object' && value.from !== undefined ? (
+                                ) : typeof value === 'object' && value !== null && value?.from !== undefined ? (
                                   <div className="mt-1 flex items-center gap-1 flex-wrap">
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
-                                      {formatChangeValue(value.from, key)}
+                                      {formatChangeValue(value?.from, key)}
                                     </span>
                                     <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                     </svg>
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">
-                                      {formatChangeValue(value.to, key)}
+                                      {formatChangeValue(value?.to, key)}
                                     </span>
                                   </div>
                                 ) : (
