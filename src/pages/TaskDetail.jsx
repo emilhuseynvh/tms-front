@@ -1921,7 +1921,7 @@ const AssigneeSelector = ({ task, users, onUpdate }) => {
 
       {isOpen && (
         <div
-          className="fixed z-[9999] w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 max-h-48 overflow-y-auto"
+          className="fixed z-[9999] w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 max-h-72 overflow-y-auto"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
         >
           {users.map(user => (

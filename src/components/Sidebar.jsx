@@ -677,6 +677,7 @@ const SpaceItem = ({
   const [editingFolder, setEditingFolder] = useState(null)
   const [isDirectListModalOpen, setIsDirectListModalOpen] = useState(false)
   const [editingList, setEditingList] = useState(null)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState(() => {
     // Başlanğıcda bütün folder-ləri açıq göstər
     const initial = {}
@@ -1106,17 +1107,39 @@ const SpaceItem = ({
                 </li>
               )})}
 
-              {/* Siyahı əlavə et */}
-              <li>
+              {/* Əlavə et menu */}
+              <li className="relative">
                 <button
-                  onClick={() => setIsDirectListModalOpen(true)}
+                  onClick={() => setAddMenuOpen(!addMenuOpen)}
                   className="w-full text-left px-2 py-1.5 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2 mt-1"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span>Siyahı əlavə et</span>
+                  <span>Əlavə et</span>
                 </button>
+                {addMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
+                    <button
+                      onClick={() => { handleOpenFolderModal(); setAddMenuOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                      Qovluq
+                    </button>
+                    <button
+                      onClick={() => { setIsDirectListModalOpen(true); setAddMenuOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Siyahı
+                    </button>
+                  </div>
+                )}
               </li>
         </ul>
       )}
@@ -1972,14 +1995,8 @@ const SpaceFormModal = ({
         await updateSpace({ id: space.id, ...formData, assigneeIds: selectedAssignees }).unwrap()
         toast.success('Sahə yeniləndi!')
       } else {
-        // Create space
+        // Create space (backend avtomatik list yaradır)
         const newSpace = await createSpace({ ...formData, assigneeIds: selectedAssignees }).unwrap()
-
-        // Create default folder
-        const newFolder = await createFolder({
-          name: 'Folder',
-          spaceId: newSpace.id
-        }).unwrap()
 
         toast.success('Sahə yaradıldı!')
 
@@ -1987,9 +2004,11 @@ const SpaceFormModal = ({
           onSpaceCreated(newSpace.id)
         }
 
-        // Navigate to the new folder
-        if (onNavigate && newFolder?.id) {
-          onNavigate(`/tasks/space/${newSpace.id}/folder/${newFolder.id}`)
+        // Navigate to the new list (backend tərəfindən yaradılıb)
+        if (onNavigate && newSpace?.taskLists?.[0]?.id) {
+          onNavigate(`/tasks/space/${newSpace.id}/list/${newSpace.taskLists[0].id}`)
+        } else if (onNavigate && newSpace?.id) {
+          onNavigate(`/tasks/space/${newSpace.id}`)
         }
       }
       onClose()
