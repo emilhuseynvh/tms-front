@@ -382,13 +382,32 @@ const TaskDetail = () => {
 
   // Hover handlers with delay for action buttons
   const handleTaskMouseEnter = (e, taskId, task, indent) => {
+    // Əgər artıq action menu açıqdırsa və fərqli task-a hover edirik, delay ilə dəyişdir
+    if (hoveredTaskId && hoveredTaskId !== taskId) {
+      // Əvvəlki timeout-u ləğv et
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current)
+      }
+      // Yeni task-a keçməzdən əvvəl delay ver ki, action menu-ya keçmək mümkün olsun
+      hoverTimeoutRef.current = setTimeout(() => {
+        updateHoverState(e, taskId, task, indent)
+      }, 100)
+      return
+    }
+
+    // İlk hover və ya eyni task-a hover
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current)
       hoverTimeoutRef.current = null
     }
+    updateHoverState(e, taskId, task, indent)
+  }
+
+  const updateHoverState = (e, taskId, task, indent) => {
     setHoveredTaskId(taskId)
     // Pozisiyanı hesabla - title td-nin rect-ini tap
-    const tr = e.currentTarget
+    const tr = e.currentTarget || e.target?.closest('tr')
+    if (!tr) return
     const titleTd = tr.querySelector('td:nth-child(2)')
     if (titleTd) {
       const tdRect = titleTd.getBoundingClientRect()
@@ -414,7 +433,7 @@ const TaskDetail = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredTaskId(null)
       setActionMenuPosition(null)
-    }, 200) // 200ms delay
+    }, 300) // 300ms delay - action menu-ya keçmək üçün kifayət
   }
 
   const handleActionMenuMouseEnter = () => {
@@ -428,7 +447,7 @@ const TaskDetail = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredTaskId(null)
       setActionMenuPosition(null)
-    }, 200)
+    }, 150)
   }
 
   // Drag and Drop handlers
