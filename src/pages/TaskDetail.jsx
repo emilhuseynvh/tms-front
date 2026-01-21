@@ -380,51 +380,22 @@ const TaskDetail = () => {
     }
   }
 
-  // Hover handlers with delay for action buttons
+  // Hover handlers with delay for action menu
   const handleTaskMouseEnter = (e, taskId, task, indent) => {
-    // Əgər artıq action menu açıqdırsa və fərqli task-a hover edirik, delay ilə dəyişdir
-    if (hoveredTaskId && hoveredTaskId !== taskId) {
-      // Əvvəlki timeout-u ləğv et
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current)
-      }
-      // Yeni task-a keçməzdən əvvəl delay ver ki, action menu-ya keçmək mümkün olsun
-      hoverTimeoutRef.current = setTimeout(() => {
-        updateHoverState(e, taskId, task, indent)
-      }, 100)
-      return
-    }
-
-    // İlk hover və ya eyni task-a hover
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current)
       hoverTimeoutRef.current = null
     }
-    updateHoverState(e, taskId, task, indent)
-  }
-
-  const updateHoverState = (e, taskId, task, indent) => {
     setHoveredTaskId(taskId)
-    // Pozisiyanı hesabla - title td-nin rect-ini tap
-    const tr = e.currentTarget || e.target?.closest('tr')
-    if (!tr) return
+    const tr = e.currentTarget
     const titleTd = tr.querySelector('td:nth-child(2)')
     if (titleTd) {
       const tdRect = titleTd.getBoundingClientRect()
-      const titleDiv = titleTd.querySelector('.flex-1')
-      const titleWidth = titleDiv ? titleDiv.getBoundingClientRect().width : 0
-      const actionMenuWidth = task.parentId ? 120 : 90 // Təxmini genişlik
-      const availableSpace = tdRect.right - tdRect.left - indent - titleWidth - 20
-      const showInline = availableSpace >= actionMenuWidth
-
       setActionMenuPosition({
-        top: tdRect.bottom + 2,
+        top: tdRect.bottom - 4, // tr-ə daha yaxın
         left: tdRect.left + indent + 8,
         task,
-        indent,
-        showInline,
-        inlineRight: tdRect.right - 8,
-        inlineTop: tdRect.top + (tdRect.height / 2)
+        indent
       })
     }
   }
@@ -433,7 +404,7 @@ const TaskDetail = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredTaskId(null)
       setActionMenuPosition(null)
-    }, 300) // 300ms delay - action menu-ya keçmək üçün kifayət
+    }, 150)
   }
 
   const handleActionMenuMouseEnter = () => {
@@ -447,7 +418,7 @@ const TaskDetail = () => {
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredTaskId(null)
       setActionMenuPosition(null)
-    }, 150)
+    }, 100)
   }
 
   // Drag and Drop handlers
@@ -1320,18 +1291,13 @@ const TaskDetail = () => {
   const ActionMenuPortal = () => {
     if (!actionMenuPosition || !hoveredTaskId) return null
     const task = actionMenuPosition.task
-    const { showInline, inlineRight, inlineTop, top, left } = actionMenuPosition
-
-    // Inline göstəriləcəksə - sağda, deyilsə - altda
-    const style = showInline
-      ? { top: inlineTop, left: inlineRight, transform: 'translate(-100%, -50%)' }
-      : { top, left }
+    const { top, left } = actionMenuPosition
 
     return createPortal(
       <div
         ref={actionMenuRef}
-        className={`fixed flex items-center gap-0.5 bg-white shadow-lg rounded-md px-1 py-0.5 z-50 border border-gray-200`}
-        style={style}
+        className="fixed flex items-center gap-0.5 bg-white shadow-md rounded px-0.5 py-0.5 z-50 border border-gray-200"
+        style={{ top, left }}
         onMouseEnter={handleActionMenuMouseEnter}
         onMouseLeave={handleActionMenuMouseLeave}
       >
