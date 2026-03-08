@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 export const chatApi = createApi({
   reducerPath: 'chatApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'https://tms-back.apasni.me/',
+    baseUrl: 'http://api.tanitim.az',
     prepareHeaders: (headers) => {
       const token = localStorage.getItem('token')
       if (token) {

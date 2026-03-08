@@ -77,7 +77,7 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
       console.log('Initializing global socket connection with token...')
 
       // Connect to Socket.io server with /chat namespace
-      globalSocket = io('https://tms-back.apasni.me/chat', {
+      globalSocket = io('http://api.tanitim.az/chat', {
         auth: {
           token: token,
         },
