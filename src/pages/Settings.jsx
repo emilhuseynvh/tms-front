@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-toastify'
 import {
   useGetNotificationSettingsQuery,
-  useUpdateNotificationSettingsMutation
+  useUpdateNotificationSettingsMutation,
+  useUploadAudioMutation,
 } from '../services/adminApi'
+import {
+  getSoundPresets,
+  syncSoundSettings,
+  playSound,
+} from '../utils/notificationSound'
 
 const Settings = () => {
   const { data: settings, isLoading } = useGetNotificationSettingsQuery()
@@ -178,6 +184,9 @@ const Settings = () => {
           </form>
         </div>
 
+        {/* Notification Sound Settings */}
+        <NotificationSoundSettings />
+
         {/* Info Box */}
         <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex gap-2 sm:gap-3">
@@ -194,6 +203,190 @@ const Settings = () => {
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const NotificationSoundSettings = () => {
+  const presets = getSoundPresets()
+  const { data: settings } = useGetNotificationSettingsQuery()
+  const [updateSettings] = useUpdateNotificationSettingsMutation()
+  const [uploadAudio] = useUploadAudioMutation()
+  const [selected, setSelected] = useState('default')
+  const [customUrl, setCustomUrl] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    if (settings) {
+      setSelected(settings.soundType || 'default')
+      setCustomUrl(settings.customSoundUrl || null)
+      syncSoundSettings(settings.soundType, settings.customSoundUrl)
+    }
+  }, [settings])
+
+  const handleSelect = async (id) => {
+    setSelected(id)
+    playSound(id, customUrl)
+    try {
+      await updateSettings({ soundType: id }).unwrap()
+      syncSoundSettings(id, customUrl)
+    } catch {
+      toast.error('Səs saxlanarkən xəta baş verdi!')
+    }
+  }
+
+  const handleCustomUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const validTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3']
+    if (!validTypes.includes(file.type)) {
+      toast.error('Yalnız MP3, WAV və OGG faylları yüklənə bilər!')
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Fayl ölçüsü 2MB-dan az olmalıdır!')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const result = await uploadAudio(formData).unwrap()
+      const url = result.url
+
+      setCustomUrl(url)
+      setSelected('custom')
+
+      await updateSettings({ soundType: 'custom', customSoundUrl: url }).unwrap()
+      syncSoundSettings('custom', url)
+      toast.success('Səs faylı yükləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Fayl yüklənərkən xəta baş verdi!')
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveCustom = async () => {
+    try {
+      await updateSettings({ soundType: 'default', customSoundUrl: null }).unwrap()
+      setCustomUrl(null)
+      setSelected('default')
+      syncSoundSettings('default', null)
+    } catch {
+      toast.error('Xəta baş verdi!')
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mt-4 sm:mt-6">
+      <div className="flex items-center gap-3 mb-4 sm:mb-6">
+        <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg shrink-0">
+          <svg className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">Bildiriş Səsi</h2>
+          <p className="text-xs sm:text-sm text-gray-500">Bildiriş gəldikdə çalınacaq səsi seçin</p>
+        </div>
+      </div>
+
+      {/* Preset Sounds */}
+      <div className="space-y-2 mb-4">
+        <label className="block text-xs sm:text-sm font-medium text-gray-700">Hazır səslər</label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {presets.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => handleSelect(preset.id)}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all text-left ${
+                selected === preset.id
+                  ? 'border-purple-500 bg-purple-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                selected === preset.id ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                </svg>
+              </div>
+              <span className={`text-sm font-medium ${
+                selected === preset.id ? 'text-purple-700' : 'text-gray-700'
+              }`}>
+                {preset.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom Sound */}
+      <div className="p-3 sm:p-4 bg-gray-50 rounded-lg">
+        <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-2">
+          Öz səsinizi yükləyin
+        </label>
+        <p className="text-[10px] sm:text-xs text-gray-500 mb-3">
+          MP3, WAV və ya OGG formatında, maksimum 2MB
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/mpeg,audio/wav,audio/ogg,audio/mp3"
+            onChange={handleCustomUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md hover:bg-white transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            {isUploading ? 'Yüklənir...' : 'Fayl seç'}
+          </button>
+
+          {customUrl && (
+            <>
+              <button
+                type="button"
+                onClick={() => { handleSelect('custom'); playSound('custom', customUrl) }}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${
+                  selected === 'custom'
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'border border-purple-300 text-purple-600 hover:bg-purple-50'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                </svg>
+                {selected === 'custom' ? 'Seçildi' : 'İstifadə et'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveCustom}
+                className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

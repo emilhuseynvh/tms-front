@@ -114,8 +114,29 @@ const NotificationBell = () => {
     if (!notification.isRead) {
       await markAsRead(notification.id)
     }
-    if (notification.taskId) {
+
+    const task = notification.task
+    const taskList = task?.taskList
+
+    if (!taskList) {
       setIsOpen(false)
+      return
+    }
+
+    let path = null
+    const listId = taskList.id
+    const spaceId = taskList.spaceId
+    const folderId = taskList.folderId
+
+    if (spaceId && folderId) {
+      path = `/tasks/space/${spaceId}/folder/${folderId}/list/${listId}`
+    } else if (spaceId) {
+      path = `/tasks/space/${spaceId}/list/${listId}`
+    }
+
+    if (path) {
+      setIsOpen(false)
+      navigate(path)
     }
   }
 

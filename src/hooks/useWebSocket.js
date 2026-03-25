@@ -3,54 +3,13 @@ import { useDispatch } from 'react-redux'
 import { io } from 'socket.io-client'
 import { toast } from 'react-toastify'
 import { chatApi } from '../services/chatApi'
+import { playNotificationSound } from '../utils/notificationSound'
 
 // Global socket instance
 let globalSocket = null
 let joinedRooms = new Set()
 let currentUserId = null // Store current user ID globally
 let currentActiveRoomId = null // Store currently active room ID globally
-
-// Audio context for notification sound
-let audioContext = null
-
-// Play notification sound using Web Audio API
-const playNotificationSound = () => {
-  try {
-    // Create audio context if it doesn't exist
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)()
-    }
-
-    // Resume audio context if it's suspended (browser autoplay policy)
-    if (audioContext.state === 'suspended') {
-      audioContext.resume()
-    }
-
-    const oscillator = audioContext.createOscillator()
-    const gainNode = audioContext.createGain()
-
-    oscillator.connect(gainNode)
-    gainNode.connect(audioContext.destination)
-
-    // Configure sound - pleasant notification tone
-    oscillator.frequency.setValueAtTime(830, audioContext.currentTime) // High note
-    oscillator.frequency.setValueAtTime(660, audioContext.currentTime + 0.1) // Lower note
-    oscillator.type = 'sine'
-
-    // Volume envelope - fade in and out
-    gainNode.gain.setValueAtTime(0, audioContext.currentTime)
-    gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.02)
-    gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.1)
-    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3)
-
-    oscillator.start(audioContext.currentTime)
-    oscillator.stop(audioContext.currentTime + 0.3)
-
-    console.log('Notification sound played')
-  } catch (error) {
-    console.log('Could not play notification sound:', error)
-  }
-}
 
 export const useWebSocket = (roomId, allRooms = [], userId = null) => {
   const dispatch = useDispatch()

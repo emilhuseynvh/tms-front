@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import {useCallback, useEffect, useRef} from 'react'
 import { createPortal } from 'react-dom'
 
 const ConfirmModal = ({
@@ -29,7 +29,7 @@ const ConfirmModal = ({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen])
+  }, [isOpen]);
 
   useEffect(() => {
     const handleEscape = (e) => {

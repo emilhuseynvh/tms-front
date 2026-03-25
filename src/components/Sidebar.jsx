@@ -1720,7 +1720,7 @@ const TaskListFormModal = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             İstifadəçilər
           </label>
-          <div className="relative">
+          <div>
             <button
               type="button"
               onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
@@ -1731,7 +1731,7 @@ const TaskListFormModal = ({
                 : 'İstifadəçi seçin...'}
             </button>
             {showAssigneeDropdown && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+              <div className="w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                 {users.map(user => (
                   <label
                     key={user.id}
@@ -1743,7 +1743,7 @@ const TaskListFormModal = ({
                       onChange={() => toggleAssignee(user.id)}
                       className="mr-2"
                     />
-                    <span className="text-sm">{user.name || user.email}</span>
+                    <span className="text-sm">{user.username || user.email}</span>
                   </label>
                 ))}
               </div>
@@ -1758,7 +1758,7 @@ const TaskListFormModal = ({
                     key={userId}
                     className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
                   >
-                    {user.name || user.email}
+                    {user.username || user.email}
                     <button
                       type="button"
                       onClick={() => toggleAssignee(userId)}
@@ -1912,7 +1912,7 @@ const FolderFormModal = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             İstifadəçilər
           </label>
-          <div className="relative">
+          <div>
             <button
               type="button"
               onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
@@ -1923,7 +1923,7 @@ const FolderFormModal = ({
                 : 'İstifadəçi seçin...'}
             </button>
             {showAssigneeDropdown && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+              <div className="w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                 {users.map(user => (
                   <label
                     key={user.id}
@@ -1935,7 +1935,7 @@ const FolderFormModal = ({
                       onChange={() => toggleAssignee(user.id)}
                       className="mr-2"
                     />
-                    <span className="text-sm">{user.name || user.email}</span>
+                    <span className="text-sm">{user.username || user.email}</span>
                   </label>
                 ))}
               </div>
@@ -1950,7 +1950,7 @@ const FolderFormModal = ({
                     key={userId}
                     className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
                   >
-                    {user.name || user.email}
+                    {user.username || user.email}
                     <button
                       type="button"
                       onClick={() => toggleAssignee(userId)}
@@ -2107,7 +2107,7 @@ const SpaceFormModal = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             İstifadəçilər
           </label>
-          <div className="relative">
+          <div>
             <button
               type="button"
               onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
@@ -2118,7 +2118,7 @@ const SpaceFormModal = ({
                 : 'İstifadəçi seçin...'}
             </button>
             {showAssigneeDropdown && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+              <div className="w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                 {users.map(user => (
                   <label
                     key={user.id}
@@ -2130,7 +2130,7 @@ const SpaceFormModal = ({
                       onChange={() => toggleAssignee(user.id)}
                       className="mr-2"
                     />
-                    <span className="text-sm">{user.name || user.email}</span>
+                    <span className="text-sm">{user.username || user.email}</span>
                   </label>
                 ))}
               </div>
@@ -2145,7 +2145,7 @@ const SpaceFormModal = ({
                     key={userId}
                     className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
                   >
-                    {user.name || user.email}
+                    {user.username || user.email}
                     <button
                       type="button"
                       onClick={() => toggleAssignee(userId)}
@@ -2254,7 +2254,7 @@ const AssigneeModal = ({
                     onChange={() => toggleAssignee(user.id)}
                     className="mr-2"
                   />
-                  <span className="text-sm">{user.name || user.email}</span>
+                  <span className="text-sm">{user.username || user.email}</span>
                 </label>
               ))
             )}
@@ -2268,7 +2268,7 @@ const AssigneeModal = ({
                     key={userId}
                     className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
                   >
-                    {user.name || user.email}
+                    {user.username || user.email}
                     <button
                       type="button"
                       onClick={() => toggleAssignee(userId)}

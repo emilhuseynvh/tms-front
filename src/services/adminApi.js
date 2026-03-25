@@ -128,6 +128,15 @@ export const adminApi = createApi({
       }),
     }),
 
+    // Upload audio
+    uploadAudio: builder.mutation({
+      query: (formData) => ({
+        url: '/api/uploads/audio',
+        method: 'POST',
+        body: formData,
+      }),
+    }),
+
     // Get all folders
     getFolders: builder.query({
       query: () => '/api/folder',
@@ -379,6 +388,15 @@ export const adminApi = createApi({
       invalidatesTags: ['TaskStatuses'],
     }),
 
+    reorderTaskStatuses: builder.mutation({
+      query: (statusIds) => ({
+        url: '/api/task-status/reorder',
+        method: 'POST',
+        body: { statusIds },
+      }),
+      invalidatesTags: ['TaskStatuses'],
+    }),
+
     // Activity Log endpoints
     getActivityLogs: builder.query({
       query: ({ page = 1, limit = 20, userId, type, search, startDate, endDate }) => {
@@ -610,6 +628,7 @@ export const {
   useDeleteUserMutation,
   useUpdateProfileMutation,
   useUploadImageMutation,
+  useUploadAudioMutation,
   // Folder hooks
   useGetFoldersQuery,
   useGetMyFoldersQuery,
@@ -642,6 +661,7 @@ export const {
   useCreateTaskStatusMutation,
   useUpdateTaskStatusMutation,
   useDeleteTaskStatusMutation,
+  useReorderTaskStatusesMutation,
   // ActivityLog hooks
   useGetActivityLogsQuery,
   // Trash hooks

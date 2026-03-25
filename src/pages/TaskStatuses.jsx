@@ -4,6 +4,7 @@ import {
   useCreateTaskStatusMutation,
   useUpdateTaskStatusMutation,
   useDeleteTaskStatusMutation,
+  useReorderTaskStatusesMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
 import { useConfirm } from '../context/ConfirmContext'
@@ -37,11 +38,19 @@ const TaskStatuses = () => {
   const [editingStatus, setEditingStatus] = useState(null)
   const [inlineEditId, setInlineEditId] = useState(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
+  const [orderedStatuses, setOrderedStatuses] = useState([])
+  const [draggedIndex, setDraggedIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
 
   const { data: statuses = [], isLoading } = useGetTaskStatusesQuery()
   const [createStatus, { isLoading: isCreating }] = useCreateTaskStatusMutation()
   const [updateStatus, { isLoading: isUpdating }] = useUpdateTaskStatusMutation()
   const [deleteStatus] = useDeleteTaskStatusMutation()
+  const [reorderStatuses] = useReorderTaskStatusesMutation()
+
+  useEffect(() => {
+    setOrderedStatuses(statuses)
+  }, [statuses])
 
   const handleOpenModal = (status = null) => {
     setEditingStatus(status)
@@ -100,6 +109,52 @@ const TaskStatuses = () => {
     return iconOption ? iconOption.icon : '●'
   }
 
+  // Drag and drop handlers
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.currentTarget.style.opacity = '0.5'
+  }
+
+  const handleDragEnd = (e) => {
+    e.currentTarget.style.opacity = '1'
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedIndex !== index) {
+      setDragOverIndex(index)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = async (e, dropIndex) => {
+    e.preventDefault()
+    setDragOverIndex(null)
+
+    if (draggedIndex === null || draggedIndex === dropIndex) return
+
+    const newOrder = [...orderedStatuses]
+    const [dragged] = newOrder.splice(draggedIndex, 1)
+    newOrder.splice(dropIndex, 0, dragged)
+
+    setOrderedStatuses(newOrder)
+    setDraggedIndex(null)
+
+    try {
+      await reorderStatuses(newOrder.map(s => s.id)).unwrap()
+    } catch (error) {
+      setOrderedStatuses(statuses)
+      toast.error('Sıralama zamanı xəta baş verdi!')
+    }
+  }
+
   return (
     <div>
       {/* Header */}
@@ -107,7 +162,7 @@ const TaskStatuses = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Statuslar</h1>
-            <p className="text-sm text-gray-500 mt-1">Tapşırıq statuslarını idarə edin</p>
+            <p className="text-sm text-gray-500 mt-1">Tapşırıq statuslarını idarə edin. Sıranı dəyişmək üçün sürüşdürün.</p>
           </div>
           <button
             onClick={() => handleOpenModal()}
@@ -123,7 +178,7 @@ const TaskStatuses = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Yüklənir...</p>
         </div>
-      ) : statuses.length === 0 ? (
+      ) : orderedStatuses.length === 0 ? (
         <div className="p-8 text-center bg-white rounded-lg border border-gray-200">
           <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
             <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,14 +195,35 @@ const TaskStatuses = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {statuses.map((status) => (
+          {orderedStatuses.map((status, index) => (
             <div
               key={status.id}
-              className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow group"
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              className={`bg-white rounded-lg border p-4 hover:shadow-md transition-all group cursor-grab active:cursor-grabbing ${
+                dragOverIndex === index
+                  ? 'border-blue-400 ring-2 ring-blue-200'
+                  : 'border-gray-200'
+              }`}
             >
               <div className="flex items-center gap-3 mb-4">
+                {/* Drag handle */}
+                <div className="text-gray-300 group-hover:text-gray-400 transition-colors flex-shrink-0">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="9" cy="6" r="1.5" />
+                    <circle cx="15" cy="6" r="1.5" />
+                    <circle cx="9" cy="12" r="1.5" />
+                    <circle cx="15" cy="12" r="1.5" />
+                    <circle cx="9" cy="18" r="1.5" />
+                    <circle cx="15" cy="18" r="1.5" />
+                  </svg>
+                </div>
                 <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg"
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg flex-shrink-0"
                   style={{ backgroundColor: status.color }}
                 >
                   {getIconDisplay(status.icon)}

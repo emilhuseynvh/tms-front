@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import Header from '../components/Header'
 import FloatingChat from '../components/FloatingChat'
@@ -7,7 +7,8 @@ import TaskNotifications from '../components/TaskNotifications'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useGetRoomsQuery } from '../services/chatApi'
 import { useVerifyQuery } from '../services/authApi'
-import { useGetMyTasksQuery } from '../services/adminApi'
+import { useGetMyTasksQuery, useGetNotificationSettingsQuery } from '../services/adminApi'
+import { syncSoundSettings } from '../utils/notificationSound'
 
 const AppLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -15,6 +16,13 @@ const AppLayout = () => {
   const { data: rooms = [] } = useGetRoomsQuery()
   const { data: currentUser } = useVerifyQuery()
   const { data: myTasks = [] } = useGetMyTasksQuery(undefined, { skip: !currentUser })
+  const { data: notifSettings } = useGetNotificationSettingsQuery()
+
+  useEffect(() => {
+    if (notifSettings) {
+      syncSoundSettings(notifSettings.soundType, notifSettings.customSoundUrl)
+    }
+  }, [notifSettings])
 
   useWebSocket(null, rooms, currentUser?.id)
 
