@@ -55,6 +55,12 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { data: currentUser } = useVerifyQuery()
   const { data: spaces = [] } = useGetMySpacesQuery()
   const [createSpace, { isLoading: isCreatingSpace }] = useCreateSpaceMutation()
+
+  useEffect(() => {
+    if (location.pathname === '/tasks/influenser-az') {
+      setIsTasksOpen(true)
+    }
+  }, [location.pathname])
   const [updateSpace, { isLoading: isUpdatingSpace }] = useUpdateSpaceMutation()
   const [deleteSpace] = useDeleteSpaceMutation()
   const [reorderSpaces] = useReorderSpacesMutation()
@@ -568,6 +574,21 @@ const Sidebar = ({ isOpen, onClose }) => {
             {/* Spaces List */}
             {isTasksOpen && (
               <div className="mt-2 ml-3 space-y-2">
+                <div className="px-2">
+                  <NavLink
+                    to="/tasks/influenser-az"
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      `flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
+                        isActive
+                          ? 'bg-indigo-800 text-white ring-2 ring-indigo-400/60 ring-offset-2 ring-offset-white'
+                          : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 hover:shadow-md'
+                      }`
+                    }
+                  >
+                    influenser.az
+                  </NavLink>
+                </div>
                 {/* Search Input with Add Button */}
                 <div className="px-2 flex gap-1">
                   <input

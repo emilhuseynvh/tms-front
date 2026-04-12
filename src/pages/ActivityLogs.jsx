@@ -4,6 +4,15 @@ import {
   useGetUsersQuery,
   useGetTaskStatusesQuery,
 } from '../services/adminApi'
+import { useVerifyQuery } from '../services/authApi'
+import { TaskStatusBadge, TaskStatusFilterDropdown } from '../components/TaskStatusBadge'
+import ModalDatePicker from '../components/ModalDatePicker'
+import {
+  formatFullDateTimeBaku,
+  bakuYmdToUtcRange,
+  formatRelativeTimeAgo,
+  parseServerTimestamp,
+} from '../utils/bakuTime'
 
 const ENTITY_TYPES = [
   { value: '', label: 'Hamısı' },
@@ -45,47 +54,11 @@ const getActivityIcon = (type) => {
   return '📝'
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-
-  const date = new Date(dateString)
-
-  const now = new Date()
-  let diff = now.getTime() - date.getTime()
-
-  if (diff < 0) diff = 0
-
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (seconds < 60) return 'İndicə'
-  if (minutes < 60) return `${minutes} dəqiqə əvvəl`
-  if (hours < 24) return `${hours} saat əvvəl`
-  if (days < 7) return `${days} gün əvvəl`
-
-  const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
-  const day = date.getDate()
-  const month = months[date.getMonth()]
-  const year = date.getFullYear()
-  const hoursStr = String(date.getHours()).padStart(2, '0')
-  const minutesStr = String(date.getMinutes()).padStart(2, '0')
-
-  return `${day} ${month} ${year} ${hoursStr}:${minutesStr}`
-}
-
 const formatFullDate = (dateString) => {
   if (!dateString) return '-'
-  const date = new Date(dateString)
-  const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr']
-  const day = date.getDate()
-  const month = months[date.getMonth()]
-  const year = date.getFullYear()
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds}`
+  const date = parseServerTimestamp(dateString)
+  if (!date) return '-'
+  return formatFullDateTimeBaku(date)
 }
 
 const ActivityLogs = () => {
@@ -95,6 +68,7 @@ const ActivityLogs = () => {
     userId: '',
     entityType: '',
     actionType: '',
+    statusId: '',
     search: '',
     startDate: '',
     endDate: '',
@@ -113,10 +87,27 @@ const ActivityLogs = () => {
     return ''
   }
 
-  const { data, isLoading } = useGetActivityLogsQuery({
-    ...filters,
-    type: buildTypeFilter()
-  })
+  const { data: currentUser } = useVerifyQuery()
+  const isAdmin = currentUser?.role === 'admin'
+
+  const startDateParam = filters.startDate
+    ? bakuYmdToUtcRange(filters.startDate)?.start
+    : ''
+  const endDateParam = filters.endDate ? bakuYmdToUtcRange(filters.endDate)?.end : ''
+
+  const { data, isLoading } = useGetActivityLogsQuery(
+    {
+      page: filters.page,
+      limit: filters.limit,
+      ...(isAdmin ? { userId: filters.userId } : {}),
+      type: buildTypeFilter(),
+      search: filters.search,
+      startDate: startDateParam,
+      endDate: endDateParam,
+      ...(filters.statusId ? { statusId: filters.statusId } : {}),
+    },
+    { skip: !currentUser }
+  )
   const { data: users = [] } = useGetUsersQuery()
   const { data: statuses = [] } = useGetTaskStatusesQuery()
 
@@ -126,11 +117,6 @@ const ActivityLogs = () => {
   const userMap = {}
   users.forEach(user => {
     userMap[user.id] = user.name || user.username || user.email
-  })
-
-  const statusMap = {}
-  statuses.forEach(status => {
-    statusMap[status.id] = status.name
   })
 
   const formatAssignees = (ids) => {
@@ -248,9 +234,17 @@ const ActivityLogs = () => {
     }
 
     if (key === 'statusId' && typeof value === 'object' && value?.from !== undefined) {
-      const fromName = statusMap[value.from] || 'Yoxdur'
-      const toName = statusMap[value.to] || 'Yoxdur'
-      return [{ type: 'change', from: fromName, to: toName }]
+      const fromStatus = statuses.find((s) => s.id === value.from)
+      const toStatus = statuses.find((s) => s.id === value.to)
+      return [
+        {
+          type: 'statusChange',
+          fromStatus,
+          toStatus,
+          fromId: value.from,
+          toId: value.to,
+        },
+      ]
     }
 
     if (key === 'startAt' || key === 'dueAt') {
@@ -301,13 +295,20 @@ const ActivityLogs = () => {
     return null
   }
 
-  const formatChangeValue = (value, key) => {
+  const renderChangeValue = (value, key) => {
     if (value === null || value === undefined) return '-'
     if (key === 'assignees' && Array.isArray(value)) {
       return formatAssignees(value)
     }
     if (key === 'statusId') {
-      return statusMap[value] || `Status #${value}`
+      const id = Number(value)
+      if (Number.isNaN(id)) return String(value)
+      const st = statuses.find((s) => s.id === id)
+      return st ? (
+        <TaskStatusBadge status={st} />
+      ) : (
+        <span className="text-xs text-gray-500">Status #{id}</span>
+      )
     }
     if (typeof value === 'boolean') return value ? 'Bəli' : 'Xeyr'
     return String(value)
@@ -326,12 +327,14 @@ const ActivityLogs = () => {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Əməliyyat tarixçəsi</h1>
-        <p className="text-sm text-gray-500 mt-1">Sistemdə edilən bütün əməliyyatları izləyin</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {isAdmin ? 'Sistemdə edilən bütün əməliyyatları izləyin' : 'Öz əməliyyat tarixçəniz'}
+        </p>
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
           {/* Search */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Axtar</label>
@@ -344,22 +347,24 @@ const ActivityLogs = () => {
             />
           </div>
 
-          {/* User Filter */}
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">İstifadəçi</label>
-            <select
-              value={filters.userId}
-              onChange={(e) => handleFilterChange('userId', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Bütün istifadəçilər</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* User Filter — yalnız admin */}
+          {isAdmin && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">İstifadəçi</label>
+              <select
+                value={filters.userId}
+                onChange={(e) => handleFilterChange('userId', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Bütün istifadəçilər</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.username}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Entity Type Filter */}
           <div>
@@ -393,27 +398,43 @@ const ActivityLogs = () => {
             </select>
           </div>
 
-          {/* Start Date */}
+          {/* Status — tapşırıq status dəyişikliyi ilə əlaqəli loglar */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Başlanğıc</label>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              lang="az"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+            <TaskStatusFilterDropdown
+              value={filters.statusId}
+              onChange={(v) => handleFilterChange('statusId', v)}
+              statuses={statuses}
+              emptyLabel="Bütün statuslar"
             />
           </div>
 
-          {/* End Date */}
+          {/* Tarix — tapşırıq siyahısı ilə eyni ModalDatePicker (yalnız tarix, keçmiş günlər seçilə bilər) */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Son</label>
-            <input
-              type="date"
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Başlama tarixi
+            </label>
+            <ModalDatePicker
+              value={filters.startDate}
+              onChange={(v) => handleFilterChange('startDate', v)}
+              placeholder="Başlama tarixi"
+              dateOnly
+              disablePastDays={false}
+              triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Bitmə tarixi
+            </label>
+            <ModalDatePicker
               value={filters.endDate}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              lang="az"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={(v) => handleFilterChange('endDate', v)}
+              placeholder="Bitmə tarixi"
+              dateOnly
+              disablePastDays={false}
+              triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -505,23 +526,58 @@ const ActivityLogs = () => {
                                             </span>
                                           </>
                                         )}
+                                        {change.type === 'statusChange' && (
+                                          <>
+                                            {change.fromStatus ? (
+                                              <TaskStatusBadge status={change.fromStatus} />
+                                            ) : (
+                                              <span className="text-xs text-gray-500">
+                                                {change.fromId != null ? `Status #${change.fromId}` : 'Yoxdur'}
+                                              </span>
+                                            )}
+                                            <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                            </svg>
+                                            {change.toStatus ? (
+                                              <TaskStatusBadge status={change.toStatus} />
+                                            ) : (
+                                              <span className="text-xs text-gray-500">
+                                                {change.toId != null ? `Status #${change.toId}` : 'Yoxdur'}
+                                              </span>
+                                            )}
+                                          </>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
                                 ) : typeof value === 'object' && value !== null && value?.from !== undefined ? (
                                   <div className="mt-1 flex items-center gap-1 flex-wrap">
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
-                                      {formatChangeValue(value?.from, key)}
-                                    </span>
-                                    <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                    </svg>
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">
-                                      {formatChangeValue(value?.to, key)}
-                                    </span>
+                                    {key === 'statusId' ? (
+                                      <>
+                                        {renderChangeValue(value?.from, key)}
+                                        <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                        {renderChangeValue(value?.to, key)}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                                          {renderChangeValue(value?.from, key)}
+                                        </span>
+                                        <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">
+                                          {renderChangeValue(value?.to, key)}
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
                                 ) : (
-                                  <span className="ml-1 text-gray-700">{formatChangeValue(value, key)}</span>
+                                  <span className="ml-1 text-gray-700 inline-flex items-center gap-1 flex-wrap">
+                                    {renderChangeValue(value, key)}
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -535,7 +591,7 @@ const ActivityLogs = () => {
                 {/* Time */}
                 <div className="relative group">
                   <div className="text-xs text-gray-400 flex-shrink-0 cursor-help">
-                    {formatDate(log.createdAt)}
+                    {formatRelativeTimeAgo(log.createdAt)}
                   </div>
                   <div className="absolute right-0 bottom-full mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-10">
                     {formatFullDate(log.createdAt)}

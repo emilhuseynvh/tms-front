@@ -19,6 +19,25 @@ import {
 import Modal from '../components/Modal'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
+import { parseServerTimestamp } from '../utils/bakuTime'
+
+const BAKU_TZ = 'Asia/Baku'
+
+function formatTaskTableDate(raw) {
+  const d = parseServerTimestamp(raw)
+  if (!d) return '—'
+  return d.toLocaleDateString('en-GB', { timeZone: BAKU_TZ, day: 'numeric', month: 'numeric', year: '2-digit' })
+}
+
+function rootTasksForOverview(tasks) {
+  const list = tasks || []
+  return list
+    .filter((t) => !t.parentId)
+    .map((t) => ({
+      ...t,
+      _subCount: list.filter((st) => st.parentId === t.id).length,
+    }))
+}
 
 const TaskLists = () => {
   const { spaceId, folderId } = useParams()
@@ -32,6 +51,7 @@ const TaskLists = () => {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
+  const [collapsedListIds, setCollapsedListIds] = useState(() => new Set())
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -70,6 +90,29 @@ const TaskLists = () => {
 
   const pageTitle = data?.name || 'Yüklənir...'
   const pageDescription = data?.description
+
+  const listBreadcrumb = folderId
+    ? [data?.space?.name, data?.name].filter(Boolean).join(' / ')
+    : ''
+
+  const navigateToList = (listId) => {
+    if (folderId && !spaceId) {
+      navigate(`/tasks/folder/${folderId}/list/${listId}`)
+    } else if (folderId) {
+      navigate(`/tasks/space/${spaceId}/folder/${folderId}/list/${listId}`)
+    } else {
+      navigate(`/tasks/space/${spaceId}/list/${listId}`)
+    }
+  }
+
+  const toggleListCollapsed = (id) => {
+    setCollapsedListIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const folders = data?.folders || []
   const directLists = data?.directLists || data?.taskLists || []
@@ -598,64 +641,160 @@ const TaskLists = () => {
                 </svg>
                 Siyahılar ({filteredData.lists.length})
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredData.lists.map((list) => (
-                  <div
-                    key={list.id}
-                    onClick={() => {
-                      if (folderId) {
-                        navigate(`/tasks/space/${spaceId}/folder/${folderId}/list/${list.id}`)
-                      } else {
-                        navigate(`/tasks/space/${spaceId}/list/${list.id}`)
-                      }
-                    }}
-                    className="bg-white rounded-lg border border-gray-200 p-4 hover:border-green-300 hover:shadow-md transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                        </svg>
+              <div className="space-y-4">
+                {filteredData.lists.map((list) => {
+                  const isCollapsed = collapsedListIds.has(list.id)
+                  const rows = rootTasksForOverview(list.tasks)
+                  return (
+                    <div key={list.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      {listBreadcrumb && (
+                        <div className="px-3 pt-2.5 pb-0 text-[11px] text-gray-400 truncate" title={listBreadcrumb}>
+                          {listBreadcrumb}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 px-2 sm:px-3 py-2 border-b border-gray-100 bg-gray-50/80">
+                        <button
+                          type="button"
+                          onClick={() => toggleListCollapsed(list.id)}
+                          className="p-1 rounded hover:bg-gray-200 text-gray-600 shrink-0"
+                          title={isCollapsed ? 'Aç' : 'Bağla'}
+                          aria-expanded={!isCollapsed}
+                        >
+                          <svg
+                            className={`w-4 h-4 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigateToList(list.id)}
+                          className="flex-1 min-w-0 text-left font-medium text-gray-900 hover:text-blue-600 truncate text-sm py-0.5"
+                        >
+                          {list.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigateToList(list.id)}
+                          className="hidden sm:inline text-xs text-blue-600 hover:underline shrink-0 px-2"
+                        >
+                          + Tapşırıq əlavə et
+                        </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleArchiveList(list.id, list.name) }}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                            title="Arxivə at"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleOpenModal(list) }}
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Redaktə et"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(list.id) }}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Sil"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleArchiveList(list.id, list.name) }}
-                          className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                          title="Arxivə at"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleOpenModal(list) }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(list.id) }}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
+                      {!isCollapsed && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[720px] text-sm">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-white">
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Başlıq</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[28%] min-w-[120px]">Açıqlama</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Bitmə</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Status</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Yaradılıb</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Yenilənib</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {rows.length === 0 ? (
+                                <tr>
+                                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-gray-500">
+                                    Bu siyahıda tapşırıq yoxdur — tam görünüş üçün siyahıya daxil olun.
+                                  </td>
+                                </tr>
+                              ) : (
+                                rows.map((task) => (
+                                  <tr
+                                    key={task.id}
+                                    className="hover:bg-gray-50 cursor-pointer"
+                                    onClick={() => navigateToList(list.id)}
+                                  >
+                                    <td className="px-3 py-2 align-top">
+                                      <div className="flex items-start gap-2 min-w-0">
+                                        <span className="font-medium text-gray-900 line-clamp-2">{task.title}</span>
+                                        {task._subCount > 0 && (
+                                          <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] text-gray-500 bg-gray-100 rounded px-1 py-0.5" title="Alt tapşırıq">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                                            </svg>
+                                            {task._subCount}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-gray-600">
+                                      <span className="line-clamp-2 text-xs">{task.description || '—'}</span>
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-gray-600 whitespace-nowrap text-xs">
+                                      {formatTaskTableDate(task.dueAt)}
+                                    </td>
+                                    <td className="px-3 py-2 align-top">
+                                      {task.status ? (
+                                        <span
+                                          className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded"
+                                          style={{ backgroundColor: task.status.color + '20', color: task.status.color }}
+                                        >
+                                          {task.status.name}
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-gray-600 whitespace-nowrap text-xs">
+                                      {formatTaskTableDate(task.createdAt)}
+                                    </td>
+                                    <td className="px-3 py-2 align-top text-gray-600 whitespace-nowrap text-xs">
+                                      {formatTaskTableDate(task.updatedAt)}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
-                    <h3 className="font-medium text-gray-900 mb-2 truncate">{list.name}</h3>
-                    <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
-                      <span>{list.tasks?.length || 0} tapşırıq</span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {filteredData.tasks.length > 0 && (
+          {filterType === 'tasks' && filteredData.tasks.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 export const adminApi = createApi({
   reducerPath: 'adminApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'https://api.tanitim.az',
+    baseUrl: 'http://localhost:3000/',
     prepareHeaders: (headers) => {
       const token = localStorage.getItem('token')
       if (token) {
@@ -399,7 +399,7 @@ export const adminApi = createApi({
 
     // Activity Log endpoints
     getActivityLogs: builder.query({
-      query: ({ page = 1, limit = 20, userId, type, search, startDate, endDate }) => {
+      query: ({ page = 1, limit = 20, userId, type, search, startDate, endDate, statusId }) => {
         const params = new URLSearchParams()
         params.append('page', page)
         params.append('limit', limit)
@@ -408,6 +408,7 @@ export const adminApi = createApi({
         if (search) params.append('search', search)
         if (startDate) params.append('startDate', startDate)
         if (endDate) params.append('endDate', endDate)
+        if (statusId) params.append('statusId', statusId)
         return `/api/activity-log?${params.toString()}`
       },
       providesTags: ['ActivityLogs'],

@@ -9,24 +9,11 @@ import {
   useDeleteNotificationMutation,
   useClearAllNotificationsMutation,
 } from '../services/adminApi'
+import { formatRelativeTimeAgo } from '../utils/bakuTime'
 
 const formatTimeAgo = (dateString) => {
   if (!dateString) return ''
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (seconds < 60) return 'İndicə'
-  if (minutes < 60) return `${minutes} dəq`
-  if (hours < 24) return `${hours} saat`
-  if (days < 7) return `${days} gün`
-
-  return date.toLocaleDateString('az-AZ', { day: 'numeric', month: 'short' })
+  return formatRelativeTimeAgo(dateString, 'short')
 }
 
 const getNotificationIcon = (type) => {

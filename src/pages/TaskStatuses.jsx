@@ -7,19 +7,9 @@ import {
   useReorderTaskStatusesMutation,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
+import { TASK_STATUS_ICON_OPTIONS as ICON_OPTIONS, getTaskStatusIconChar } from '../components/TaskStatusBadge'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
-
-const ICON_OPTIONS = [
-  { value: 'circle', label: 'Dairə', icon: '●' },
-  { value: 'check', label: 'Tik', icon: '✓' },
-  { value: 'clock', label: 'Saat', icon: '⏱' },
-  { value: 'star', label: 'Ulduz', icon: '★' },
-  { value: 'flag', label: 'Bayraq', icon: '⚑' },
-  { value: 'arrow', label: 'Ox', icon: '→' },
-  { value: 'pause', label: 'Pauza', icon: '⏸' },
-  { value: 'play', label: 'Oynat', icon: '▶' },
-]
 
 const COLOR_PRESETS = [
   '#3B82F6', // Blue
@@ -102,11 +92,6 @@ const TaskStatuses = () => {
   const handleInlineEditCancel = () => {
     setInlineEditId(null)
     setInlineEditValue('')
-  }
-
-  const getIconDisplay = (iconValue) => {
-    const iconOption = ICON_OPTIONS.find(opt => opt.value === iconValue)
-    return iconOption ? iconOption.icon : '●'
   }
 
   // Drag and drop handlers
@@ -226,7 +211,7 @@ const TaskStatuses = () => {
                   className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-lg flex-shrink-0"
                   style={{ backgroundColor: status.color }}
                 >
-                  {getIconDisplay(status.icon)}
+                  {getTaskStatusIconChar(status.icon)}
                 </div>
                 <div className="flex-1 min-w-0">
                   {inlineEditId === status.id ? (
@@ -346,11 +331,6 @@ const StatusFormModal = ({
     }
   }
 
-  const getIconDisplay = (iconValue) => {
-    const iconOption = ICON_OPTIONS.find(opt => opt.value === iconValue)
-    return iconOption ? iconOption.icon : '●'
-  }
-
   return (
     <Modal
       isOpen={isOpen}
@@ -364,7 +344,7 @@ const StatusFormModal = ({
             className="w-12 h-12 rounded-lg flex items-center justify-center text-white text-xl"
             style={{ backgroundColor: formData.color }}
           >
-            {getIconDisplay(formData.icon)}
+            {getTaskStatusIconChar(formData.icon)}
           </div>
           <span className="ml-3 font-medium text-gray-700">
             {formData.name || 'Status adı'}

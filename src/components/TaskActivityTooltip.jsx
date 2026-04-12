@@ -1,47 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useGetTaskActivitiesQuery, useGetUsersQuery, useGetTaskStatusesQuery } from '../services/adminApi'
+import { formatRelativeTimeAgo } from '../utils/bakuTime'
 
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-
-  let date = new Date(dateString)
-
-  const hasTimezone = /[Zz]|[+-]\d{2}:?\d{2}/.test(dateString)
-  if (!hasTimezone) {
-    date = new Date(dateString + 'Z')
-  }
-
-  const now = new Date()
-  let diff = now.getTime() - date.getTime()
-
-  if (diff < 0) diff = 0
-
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (seconds < 60) return 'İndicə'
-  if (minutes < 60) return `${minutes} dəq əvvəl`
-  if (hours < 24) {
-    const remainingMinutes = minutes % 60
-    if (remainingMinutes === 0) return `${hours} saat əvvəl`
-    return `${hours}s ${remainingMinutes}dəq əvvəl`
-  }
-  if (days < 7) {
-    const remainingHours = hours % 24
-    if (remainingHours === 0) return `${days} gün əvvəl`
-    return `${days}g ${remainingHours}s əvvəl`
-  }
-
-  return date.toLocaleDateString('az-AZ', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const formatDate = (dateString) => formatRelativeTimeAgo(dateString, 'default')
 
 const getChangeLabel = (key, isFirstTime = false) => {
   if (key === 'created') {

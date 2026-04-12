@@ -6,6 +6,7 @@ import Projects from "../pages/Projects";
 import Profile from "../pages/Profile";
 import Users from "../pages/Users";
 import Tasks from "../pages/Tasks";
+import InfluenserAzPage from "../pages/InfluenserAzPage";
 import TaskLists from "../pages/TaskLists";
 import TaskDetail from "../pages/TaskDetail";
 import TaskStatuses from "../pages/TaskStatuses";
@@ -31,6 +32,7 @@ export const router = createBrowserRouter(
                 <Route path="/trash" element={<Trash />} />
                 <Route path="/archive" element={<Archive />} />
                 <Route path="/tasks" element={<Tasks />} />
+                <Route path="/tasks/influenser-az" element={<InfluenserAzPage />} />
                 {/* Space routes */}
                 <Route path="/tasks/space/:spaceId" element={<TaskLists />} />
                 <Route path="/tasks/space/:spaceId/folder/:folderId" element={<TaskLists />} />

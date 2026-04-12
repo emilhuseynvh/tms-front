@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, Link } from 'react-router'
 import {
   useGetFoldersQuery,
   useCreateFolderMutation,
@@ -56,12 +56,20 @@ const Tasks = () => {
       <div className="mb-4 md:mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <h1 className="text-xl md:text-2xl font-semibold text-gray-900">Tapşırıqlar</h1>
-          <button
-            onClick={() => handleOpenModal()}
-            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Yeni Qovluq
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Link
+              to="/tasks/influenser-az"
+              className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2.5 text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md transition-all"
+            >
+              influenser.az
+            </Link>
+            <button
+              onClick={() => handleOpenModal()}
+              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Yeni Qovluq
+            </button>
+          </div>
         </div>
       </div>
 
