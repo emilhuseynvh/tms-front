@@ -15,13 +15,31 @@ import {
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
   useArchiveSpaceMutation,
+  useGetUsersQuery,
+  useGetTaskStatusesQuery,
 } from '../services/adminApi'
+import { useVerifyQuery } from '../services/authApi'
 import Modal from '../components/Modal'
+import ModalDatePicker from '../components/ModalDatePicker'
+import { TaskStatusFilterDropdown } from '../components/TaskStatusBadge'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
-import { parseServerTimestamp } from '../utils/bakuTime'
+import { parseServerTimestamp, filterEndDateParam, filterStartDateParam } from '../utils/bakuTime'
 
 const BAKU_TZ = 'Asia/Baku'
+
+const SPACE_ENTITY_TYPES = [
+  { value: 'all', label: 'Hamısı' },
+  { value: 'folders', label: 'Qovluq' },
+  { value: 'lists', label: 'Siyahı' },
+  { value: 'tasks', label: 'Tapşırıq' },
+]
+
+const FOLDER_ENTITY_TYPES = [
+  { value: 'all', label: 'Hamısı' },
+  { value: 'lists', label: 'Siyahı' },
+  { value: 'tasks', label: 'Tapşırıq' },
+]
 
 function formatTaskTableDate(raw) {
   const d = parseServerTimestamp(raw)
@@ -51,22 +69,68 @@ const TaskLists = () => {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [collapsedListIds, setCollapsedListIds] = useState(() => new Set())
+
+  const { data: currentUser } = useVerifyQuery()
+  const isAdmin = currentUser?.role === 'admin'
+  const isOverviewPage = !!(spaceId && !folderId) || !!folderId
+  const entityTypes = folderId ? FOLDER_ENTITY_TYPES : SPACE_ENTITY_TYPES
+
+  const { data: users = [] } = useGetUsersQuery(undefined, { skip: !isOverviewPage })
+  const { data: statuses = [] } = useGetTaskStatusesQuery(undefined, { skip: !isOverviewPage })
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(timer)
   }, [search])
 
+  const startDateParam = filterStartDateParam(startDate)
+  const endDateParam = filterEndDateParam(endDate)
+
+  const hasActiveFilters = !!(
+    debouncedSearch ||
+    statusFilter ||
+    assigneeFilter ||
+    startDate ||
+    endDate
+  )
+
   const { data: spaceData, isLoading: isSpaceLoading } = useGetSpaceFullDetailsQuery(
-    { id: spaceId, search: debouncedSearch },
+    {
+      id: spaceId,
+      search: debouncedSearch,
+      startDate: startDateParam,
+      endDate: endDateParam,
+      statusId: statusFilter,
+      assigneeId: assigneeFilter,
+    },
     { skip: !spaceId || !!folderId }
   )
 
   const { data: folderData, isLoading: isFolderLoading } = useGetFolderFullDetailsQuery(
-    { id: folderId, search: debouncedSearch },
+    {
+      id: folderId,
+      search: debouncedSearch,
+      startDate: startDateParam,
+      endDate: endDateParam,
+      statusId: statusFilter,
+      assigneeId: assigneeFilter,
+    },
     { skip: !folderId }
   )
+
+  const handleClearFilters = () => {
+    setSearch('')
+    setStatusFilter('')
+    setAssigneeFilter('')
+    setStartDate('')
+    setEndDate('')
+    setFilterType('all')
+  }
 
   const data = folderId ? folderData : spaceData
   const isLoading = folderId ? isFolderLoading : isSpaceLoading
@@ -293,7 +357,7 @@ const TaskLists = () => {
     ? folders.length === 0 && directLists.length === 0 && allTasks.length === 0
     : directLists.length === 0 && allTasks.length === 0
 
-  if (isEmpty && !isLoading && !debouncedSearch) {
+  if (isEmpty && !isLoading && !debouncedSearch && !(isOverviewPage && hasActiveFilters)) {
     return (
       <div className="p-4 md:p-6">
         <div className="mb-4 md:mb-6">
@@ -520,51 +584,116 @@ const TaskLists = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-3 md:p-4 mb-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-            <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Qovluq, siyahı və ya tapşırıq axtar..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+        {isOverviewPage && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+            <div className="flex flex-col xl:flex-row xl:items-end gap-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Axtar</label>
+                <input
+                  type="text"
+                  placeholder={folderId ? 'Siyahı və ya tapşırıq axtar...' : 'Qovluq, siyahı və ya tapşırıq axtar...'}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {isAdmin ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">İstifadəçi</label>
+                  <select
+                    value={assigneeFilter}
+                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Bütün istifadəçilər</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Təyin edilmiş</label>
+                  <select
+                    value={assigneeFilter}
+                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Hamısı</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name || user.username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Element</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {entityTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                <TaskStatusFilterDropdown
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  statuses={statuses}
+                  emptyLabel="Bütün statuslar"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Başlama tarixi</label>
+                <ModalDatePicker
+                  value={startDate}
+                  onChange={setStartDate}
+                  placeholder="Başlama tarixi"
+                  dateOnly
+                  disablePastDays={false}
+                  triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Bitmə tarixi</label>
+                <ModalDatePicker
+                  value={endDate}
+                  onChange={setEndDate}
+                  placeholder="Bitmə tarixi"
+                  dateOnly
+                  disablePastDays={false}
+                  triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
             </div>
 
-            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
-              <button
-                onClick={() => setFilterType('all')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${filterType === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-              >
-                Hamısı
-              </button>
-              {!folderId && (
-                <button
-                  onClick={() => setFilterType('folders')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${filterType === 'folders' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                >
-                  Qovluqlar
-                </button>
-              )}
-              <button
-                onClick={() => setFilterType('lists')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${filterType === 'lists' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-              >
-                Siyahılar
-              </button>
-              <button
-                onClick={() => setFilterType('tasks')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${filterType === 'tasks' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-              >
-                Tapşırıqlar
-              </button>
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              disabled={!hasActiveFilters}
+              className="shrink-0 w-full xl:w-auto px-4 py-2 text-sm font-medium border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+            >
+              Filterləri sıfırla
+            </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -862,13 +991,17 @@ const TaskLists = () => {
             </div>
           )}
 
-          {filteredData.folders.length === 0 && filteredData.lists.length === 0 && filteredData.tasks.length === 0 && debouncedSearch && (
+          {filteredData.folders.length === 0 && filteredData.lists.length === 0 && filteredData.tasks.length === 0 && (debouncedSearch || (isOverviewPage && hasActiveFilters)) && (
             <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
               <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Nəticə tapılmadı</h3>
-              <p className="text-gray-500">"{debouncedSearch}" üçün heç bir nəticə tapılmadı</p>
+              <p className="text-gray-500">
+                {debouncedSearch
+                  ? `"${debouncedSearch}" üçün heç bir nəticə tapılmadı`
+                  : 'Seçilmiş filterlər üzrə heç bir nəticə tapılmadı'}
+              </p>
             </div>
           )}
         </div>

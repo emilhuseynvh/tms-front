@@ -31,9 +31,13 @@ export const adminApi = createApi({
     }),
 
     getSpaceFullDetails: builder.query({
-      query: ({ id, search }) => {
+      query: ({ id, search, startDate, endDate, statusId, assigneeId }) => {
         const params = new URLSearchParams()
         if (search) params.append('search', search)
+        if (startDate && startDate !== 'undefined') params.append('startDate', startDate)
+        if (endDate && endDate !== 'undefined') params.append('endDate', endDate)
+        if (statusId) params.append('statusId', statusId)
+        if (assigneeId) params.append('assigneeId', assigneeId)
         const queryString = params.toString()
         return `/api/space/${id}/full${queryString ? `?${queryString}` : ''}`
       },
@@ -156,9 +160,13 @@ export const adminApi = createApi({
     }),
 
     getFolderFullDetails: builder.query({
-      query: ({ id, search }) => {
+      query: ({ id, search, startDate, endDate, statusId, assigneeId }) => {
         const params = new URLSearchParams()
         if (search) params.append('search', search)
+        if (startDate && startDate !== 'undefined') params.append('startDate', startDate)
+        if (endDate && endDate !== 'undefined') params.append('endDate', endDate)
+        if (statusId) params.append('statusId', statusId)
+        if (assigneeId) params.append('assigneeId', assigneeId)
         const queryString = params.toString()
         return `/api/folder/${id}/full${queryString ? `?${queryString}` : ''}`
       },
@@ -217,8 +225,8 @@ export const adminApi = createApi({
       query: ({ folderId, search, startDate, endDate }) => {
         const params = new URLSearchParams()
         if (search) params.append('search', search)
-        if (startDate) params.append('startDate', startDate)
-        if (endDate) params.append('endDate', endDate)
+        if (startDate && startDate !== 'undefined') params.append('startDate', startDate)
+        if (endDate && endDate !== 'undefined') params.append('endDate', endDate)
 
         const queryString = params.toString()
         return `/api/task-list/folder/${folderId}${queryString ? `?${queryString}` : ''}`
@@ -296,8 +304,8 @@ export const adminApi = createApi({
       query: ({ taskListId, search, startDate, endDate, statusId, assigneeId }) => {
         const params = new URLSearchParams()
         if (search) params.append('search', search)
-        if (startDate) params.append('startDate', startDate)
-        if (endDate) params.append('endDate', endDate)
+        if (startDate && startDate !== 'undefined') params.append('startDate', startDate)
+        if (endDate && endDate !== 'undefined') params.append('endDate', endDate)
         if (statusId) params.append('statusId', statusId)
         if (assigneeId) params.append('assigneeId', assigneeId)
 
@@ -406,8 +414,8 @@ export const adminApi = createApi({
         if (userId) params.append('userId', userId)
         if (type) params.append('type', type)
         if (search) params.append('search', search)
-        if (startDate) params.append('startDate', startDate)
-        if (endDate) params.append('endDate', endDate)
+        if (startDate && startDate !== 'undefined') params.append('startDate', startDate)
+        if (endDate && endDate !== 'undefined') params.append('endDate', endDate)
         if (statusId) params.append('statusId', statusId)
         return `/api/activity-log?${params.toString()}`
       },

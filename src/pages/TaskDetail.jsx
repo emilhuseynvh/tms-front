@@ -20,7 +20,8 @@ import {
 import Modal from '../components/Modal'
 import ModalDatePicker from '../components/ModalDatePicker'
 import TaskActivityTooltip from '../components/TaskActivityTooltip'
-import { formatRelativeTimeAgo } from '../utils/bakuTime'
+import { formatInlineTableDate } from '../utils/bakuTime'
+import { useFlippedDropdownPosition } from '../hooks/useFlippedDropdownPosition'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
 
@@ -28,7 +29,14 @@ const StatusDropdown = ({ value, statuses, currentStatus, onChange }) => {
   const [isOpen, setIsOpen] = useState(false)
   const buttonRef = useRef(null)
   const dropdownRef = useRef(null)
-  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  const pos = useFlippedDropdownPosition({
+    isOpen,
+    anchorRef: buttonRef,
+    dropdownRef,
+    estimatedHeight: 192,
+    minWidth: 160,
+  })
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -44,10 +52,6 @@ const StatusDropdown = ({ value, statuses, currentStatus, onChange }) => {
   }, [isOpen])
 
   const handleToggle = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: rect.left })
-    }
     setIsOpen(!isOpen)
   }
 
@@ -114,7 +118,6 @@ const TaskDetail = () => {
   const [hoveredTaskId, setHoveredTaskId] = useState(null)
   const [actionMenuPosition, setActionMenuPosition] = useState(null)
   const hoverTimeoutRef = useRef(null)
-  const actionMenuRef = useRef(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [editingField, setEditingField] = useState(null) // {taskId, field}
@@ -470,12 +473,15 @@ const TaskDetail = () => {
     const tr = e.currentTarget
     const titleTd = tr.querySelector('td:nth-child(2)')
     if (titleTd) {
-      const tdRect = titleTd.getBoundingClientRect()
+      const titleRow = titleTd.querySelector('[data-task-title-row]')
+      const titleText = titleTd.querySelector('[data-task-title]')
+      const anchorRect = (titleText || titleRow || titleTd).getBoundingClientRect()
+      const rowRect = (titleRow || titleTd).getBoundingClientRect()
       setActionMenuPosition({
-        top: tdRect.bottom - 4, // tr-ə daha yaxın
-        left: tdRect.left + indent + 8,
+        top: rowRect.bottom + 2,
+        left: anchorRect.left,
         task,
-        indent
+        indent,
       })
     }
   }
@@ -501,14 +507,90 @@ const TaskDetail = () => {
     }, 100)
   }
 
+  const renderTaskRowActions = (task) => (
+    <div
+      className="flex items-center gap-0.5 flex-shrink-0 bg-white shadow-md rounded px-0.5 py-0.5 border border-gray-200"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setParentTaskId(task.id)
+          setIsAddingTask(true)
+          setHoveredTaskId(null)
+          setActionMenuPosition(null)
+        }}
+        className="p-1 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+        title="Sub-task əlavə et"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+      {task.parentId && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleMakeRootTask(task.id)
+            setHoveredTaskId(null)
+            setActionMenuPosition(null)
+          }}
+          className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-50"
+          title="Əsas tapşırığa çevir"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </button>
+      )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          startEditing(task.id, 'title', task.title)
+          setHoveredTaskId(null)
+          setActionMenuPosition(null)
+        }}
+        className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+        title="Adını dəyiş"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          handleDelete(task.id)
+          setHoveredTaskId(null)
+          setActionMenuPosition(null)
+        }}
+        className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+        title="Sil"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
+    </div>
+  )
+
   // Drag and Drop handlers
   const [dropTarget, setDropTarget] = useState(null) // { taskId, type: 'above' | 'below' | 'inside' }
 
   const handleDragStart = (e, task, index) => {
     setDraggedTask({ task, index })
     e.dataTransfer.effectAllowed = 'move'
-    // Sidebar-a drag üçün task məlumatını əlavə et
-    e.dataTransfer.setData('application/task', JSON.stringify({ type: 'task', task: { id: task.id, title: task.title } }))
+    const dragPayload = JSON.stringify({
+      type: 'task',
+      task: {
+        id: task.id,
+        title: task.title,
+        parentId: task.parentId ?? null,
+        taskListId: task.taskListId ?? parseInt(taskListId, 10),
+      },
+    })
+    e.dataTransfer.setData('text/plain', dragPayload)
+    e.dataTransfer.setData('application/task', dragPayload)
   }
 
   const handleDragOver = (e, targetTask) => {
@@ -808,8 +890,6 @@ const TaskDetail = () => {
     return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
-  const formatRelativeTime = (dateString) => formatRelativeTimeAgo(dateString, 'detail')
-
   // Get root tasks (tasks with parentId === null)
   const rootTasks = useMemo(() => {
     if (!tasks || tasks.length === 0) return []
@@ -862,10 +942,9 @@ const TaskDetail = () => {
 
   // Recursive function to render task rows
   const renderTaskRow = (task, depth = 0, index = 0) => {
-    const indent = depth * 20
+    const indent = depth * 16
     const hasChildren = task.children && task.children.length > 0
     const isExpanded = expandedTasks.has(task.id)
-    const isHovered = hoveredTaskId === task.id
     const isEditingTitle = editingField?.taskId === task.id && editingField?.field === 'title'
     const isEditingDescription = editingField?.taskId === task.id && editingField?.field === 'description'
     const isEditingLink = editingField?.taskId === task.id && editingField?.field === 'link'
@@ -892,7 +971,7 @@ const TaskDetail = () => {
           onDragEnd={handleDragEnd}
           onMouseEnter={(e) => handleTaskMouseEnter(e, task.id, task, indent)}
           onMouseLeave={handleTaskMouseLeave}
-          className={`hover:bg-gray-50 transition-colors cursor-move border-b border-gray-200 ${
+          className={`hover:bg-gray-50 transition-colors cursor-move border-b border-gray-200 overflow-visible ${
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           } ${dropIndicatorClass}`}
         >
@@ -908,49 +987,59 @@ const TaskDetail = () => {
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
             />
           </td>
-          <td style={getColumnStyle('title')} className="px-2 py-2 relative">
-            <div className="flex items-center gap-1.5 min-w-0" style={{ paddingLeft: `${indent}px` }}>
-              {hasChildren ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleTask(task.id)
-                  }}
-                  className="p-0.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                  title={isExpanded ? 'Bağla' : 'Aç'}
-                >
-                  <svg
-                    className={`w-3.5 h-3.5 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+          <td style={getColumnStyle('title')} className="px-2 py-2">
+            <div
+              className="min-w-0 -ml-1"
+              style={{ paddingLeft: `${indent}px` }}
+            >
+              <div data-task-title-row className="flex items-center gap-1.5 min-w-0">
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleTask(task.id)
+                    }}
+                    className="p-0.5 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
+                    title={isExpanded ? 'Bağla' : 'Aç'}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              ) : (
-                <span className="inline-flex w-[22px] flex-shrink-0" aria-hidden="true" />
-              )}
-              <div className="flex-1 min-w-0">
-                {isEditingTitle ? (
-                  <input
-                    type="text"
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                    onBlur={() => saveInlineEdit(task.id, 'title')}
-                    onKeyDown={(e) => handleKeyDown(e, task.id, 'title')}
-                    autoFocus
-                    className="w-full px-1.5 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                    <svg
+                      className={`w-3.5 h-3.5 text-gray-600 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 ) : (
-                  <div
-                    onClick={() => handleOpenModal(task)}
-                    className="cursor-pointer hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5"
-                  >
-                    <span className="text-sm font-medium text-gray-900 hover:text-blue-600 break-words line-clamp-3">{task.title}</span>
-                  </div>
+                  <span className="inline-flex w-[22px] flex-shrink-0" aria-hidden="true" />
                 )}
+                <div className="flex-1 min-w-0">
+                  {isEditingTitle ? (
+                    <input
+                      type="text"
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={() => saveInlineEdit(task.id, 'title')}
+                      onKeyDown={(e) => handleKeyDown(e, task.id, 'title')}
+                      autoFocus
+                      className="w-full px-1.5 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div
+                      onClick={() => handleOpenModal(task)}
+                      className="cursor-pointer hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5"
+                    >
+                      <span
+                        data-task-title
+                        className="text-sm font-medium text-gray-900 hover:text-blue-600 break-words line-clamp-3"
+                      >
+                        {task.title}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </td>
@@ -1010,7 +1099,7 @@ const TaskDetail = () => {
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-xs font-medium text-gray-700 group-hover:text-indigo-700 transition-colors truncate">
-                    {formatRelativeTime(task.updatedAt)}
+                    {formatInlineTableDate(task.updatedAt)}
                   </span>
                 </div>
                 <svg className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1315,79 +1404,20 @@ const TaskDetail = () => {
     )
   }
 
-  // Action menu portal component
   const ActionMenuPortal = () => {
     if (!actionMenuPosition || !hoveredTaskId) return null
-    const task = actionMenuPosition.task
-    const { top, left } = actionMenuPosition
+    const { top, left, task } = actionMenuPosition
+    const isEditingTitle = editingField?.taskId === task.id && editingField?.field === 'title'
+    if (isEditingTitle) return null
 
     return createPortal(
       <div
-        ref={actionMenuRef}
-        className="fixed flex items-center gap-0.5 bg-white shadow-md rounded px-0.5 py-0.5 z-50 border border-gray-200"
+        className="fixed z-50"
         style={{ top, left }}
         onMouseEnter={handleActionMenuMouseEnter}
         onMouseLeave={handleActionMenuMouseLeave}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setParentTaskId(task.id)
-            setIsAddingTask(true)
-            setHoveredTaskId(null)
-            setActionMenuPosition(null)
-          }}
-          className="p-1 rounded text-blue-500 hover:text-blue-700 hover:bg-blue-50"
-          title="Sub-task əlavə et"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-        {task.parentId && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleMakeRootTask(task.id)
-              setHoveredTaskId(null)
-              setActionMenuPosition(null)
-            }}
-            className="p-1 rounded text-orange-500 hover:text-orange-700 hover:bg-orange-50"
-            title="Əsas tapşırığa çevir"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
-          </button>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            startEditing(task.id, 'title', task.title)
-            setHoveredTaskId(null)
-            setActionMenuPosition(null)
-          }}
-          className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"
-          title="Adını dəyiş"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDelete(task.id)
-            setHoveredTaskId(null)
-            setActionMenuPosition(null)
-          }}
-          className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
-          title="Sil"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+        {renderTaskRowActions(task)}
       </div>,
       document.body
     )
@@ -1985,13 +2015,24 @@ const TaskDetail = () => {
 // Assignee Selector Component
 const AssigneeSelector = ({ task, users, onUpdate }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
   const ref = useRef(null)
   const triggerRef = useRef(null)
+  const dropdownRef = useRef(null)
+
+  const dropdownPosition = useFlippedDropdownPosition({
+    isOpen,
+    anchorRef: triggerRef,
+    dropdownRef,
+    estimatedHeight: 288,
+    minWidth: 192,
+  })
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) {
+      if (
+        ref.current && !ref.current.contains(event.target) &&
+        dropdownRef.current && !dropdownRef.current.contains(event.target)
+      ) {
         setIsOpen(false)
       }
     }
@@ -2000,13 +2041,6 @@ const AssigneeSelector = ({ task, users, onUpdate }) => {
   }, [])
 
   const handleOpen = () => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX
-      })
-    }
     setIsOpen(!isOpen)
   }
 
@@ -2047,6 +2081,7 @@ const AssigneeSelector = ({ task, users, onUpdate }) => {
 
       {isOpen && (
         <div
+          ref={dropdownRef}
           className="fixed z-[9999] w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 max-h-72 overflow-y-auto"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
         >
@@ -2396,7 +2431,6 @@ const TaskFormModal = ({
 // Inline Date Picker Component for table cells
 const InlineDatePicker = ({ value, onChange, placeholder }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)
   const now = new Date()
@@ -2406,6 +2440,22 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
   })
   const triggerRef = useRef(null)
   const dropdownRef = useRef(null)
+
+  const isMobileView =
+    typeof window !== 'undefined' && window.innerWidth < 640
+  const panelWidth = isMobileView ? window.innerWidth - 32 : 520
+  const panelHeight = isMobileView ? 500 : 420
+
+  const position = useFlippedDropdownPosition({
+    isOpen,
+    anchorRef: triggerRef,
+    dropdownRef,
+    estimatedHeight: panelHeight,
+    width: panelWidth,
+    viewportPadding: 16,
+    fixedLeft: isMobileView ? 16 : undefined,
+    deps: [isMobileView],
+  })
 
   // Parse initial value
   useEffect(() => {
@@ -2438,33 +2488,6 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
       })
     }
   }, [isOpen, value])
-
-  // Position dropdown
-  useEffect(() => {
-    if (isOpen && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      const isMobileView = window.innerWidth < 640
-      const dropdownWidth = isMobileView ? window.innerWidth - 32 : 520
-      const dropdownHeight = isMobileView ? 500 : 420
-
-      let top = rect.bottom + 4
-      let left = isMobileView ? 16 : rect.left
-
-      if (top + dropdownHeight > window.innerHeight) {
-        top = Math.max(16, rect.top - dropdownHeight - 4)
-      }
-
-      if (!isMobileView && left + dropdownWidth > window.innerWidth) {
-        left = window.innerWidth - dropdownWidth - 16
-      }
-
-      if (left < 16) {
-        left = 16
-      }
-
-      setPosition({ top, left, width: dropdownWidth })
-    }
-  }, [isOpen])
 
   // Click outside to close
   useEffect(() => {
@@ -2648,16 +2671,8 @@ const InlineDatePicker = ({ value, onChange, placeholder }) => {
 
   const formatDisplayValue = () => {
     if (!value) return placeholder
-    const date = new Date(value)
-    if (isNaN(date.getTime())) return placeholder
-
-    const day = date.getDate()
-    const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek']
-    const month = months[date.getMonth()]
-    const hours = String(date.getHours()).padStart(2, '0')
-    const minutes = String(date.getMinutes()).padStart(2, '0')
-
-    return `${day} ${month} ${hours}:${minutes}`
+    const formatted = formatInlineTableDate(value)
+    return formatted === '-' ? placeholder : formatted
   }
 
   const monthNames = [

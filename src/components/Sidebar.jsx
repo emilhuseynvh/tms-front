@@ -26,6 +26,7 @@ import {
 import { useVerifyQuery, authApi } from '../services/authApi'
 import { useDispatch } from 'react-redux'
 import Modal from './Modal'
+import AssigneeMultiSelect from './AssigneeMultiSelect'
 import { useConfirm } from '../context/ConfirmContext'
 import { disconnectSocket } from '../hooks/useWebSocket'
 
@@ -38,6 +39,38 @@ const getListIdFromPath = (pathname) => {
 const getFolderIdFromPath = (pathname) => {
   const match = pathname.match(/\/folder\/(\d+)/)
   return match ? parseInt(match[1], 10) : null
+}
+
+const sortByOrder = (items) =>
+  [...(items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+const getDirectTaskLists = (space) =>
+  sortByOrder((space?.taskLists || []).filter((l) => l.folderId == null))
+
+const getFolderTaskLists = (folder) =>
+  sortByOrder(folder?.taskLists || [])
+
+/** Drag-and-drop sıralama zamanı istifadəçiyə gözləmə bildirişi */
+async function runReorderWithFeedback(loadingMessage, action) {
+  const toastId = toast.loading(loadingMessage, { position: 'top-right' })
+  try {
+    await action()
+    toast.update(toastId, {
+      render: 'Sıralama yeniləndi',
+      type: 'success',
+      isLoading: false,
+      autoClose: 2000,
+    })
+    return true
+  } catch (error) {
+    toast.update(toastId, {
+      render: error?.data?.message || 'Sıralama zamanı xəta baş verdi',
+      type: 'error',
+      isLoading: false,
+      autoClose: 4000,
+    })
+    return false
+  }
 }
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -63,20 +96,36 @@ const Sidebar = ({ isOpen, onClose }) => {
   }, [location.pathname])
   const [updateSpace, { isLoading: isUpdatingSpace }] = useUpdateSpaceMutation()
   const [deleteSpace] = useDeleteSpaceMutation()
-  const [reorderSpaces] = useReorderSpacesMutation()
-  const [reorderFolders] = useReorderFoldersMutation()
+  const [reorderSpaces, { isLoading: isReorderingSpaces }] = useReorderSpacesMutation()
+  const [reorderFolders, { isLoading: isReorderingFolders }] = useReorderFoldersMutation()
   const [moveFolder] = useMoveFolderMutation()
-  const [reorderTaskLists] = useReorderTaskListsMutation()
+  const [reorderTaskLists, { isLoading: isReorderingLists }] = useReorderTaskListsMutation()
+
+  const isReordering = isReorderingSpaces || isReorderingFolders || isReorderingLists
+  const reorderStatusLabel = isReorderingSpaces
+    ? 'Sahələr sıralanır...'
+    : isReorderingFolders
+      ? 'Qovluqlar sıralanır...'
+      : isReorderingLists
+        ? 'Siyahılar sıralanır...'
+        : ''
   const [moveTaskList] = useMoveTaskListMutation()
   const [updateTask] = useUpdateTaskMutation()
 
   const [draggedItem, setDraggedItem] = useState(null)
   const [dropTarget, setDropTarget] = useState(null)
+  const draggedItemRef = useRef(null)
+  const dropTargetRef = useRef(null)
 
   // Drag start - item-i tutub başlayanda
   const handleDragStart = (e, type, item, parentInfo = null) => {
+    if (isReordering) {
+      e.preventDefault()
+      return
+    }
     e.stopPropagation()
     const dragData = { type, item, parentInfo }
+    draggedItemRef.current = dragData
     setDraggedItem(dragData)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', JSON.stringify(dragData))
@@ -84,6 +133,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   // Drag end - buraxanda və ya ləğv edəndə
   const handleDragEnd = () => {
+    draggedItemRef.current = null
+    dropTargetRef.current = null
     setDraggedItem(null)
     setDropTarget(null)
   }
@@ -97,13 +148,16 @@ const Sidebar = ({ isOpen, onClose }) => {
     // TaskDetail-dən task drag edilir?
     const hasTaskData = e.dataTransfer.types.includes('application/task')
     if (hasTaskData && type === 'list') {
-      setDropTarget({ type, item, parentInfo, position: 'inside' })
+      const target = { type, item, parentInfo, position: 'inside' }
+      dropTargetRef.current = target
+      setDropTarget(target)
       return
     }
 
     // Drop target-i yalnız fərqli item üçün göstər
-    if (!draggedItem) return
-    if (draggedItem.type === type && draggedItem.item.id === item.id) return
+    const activeDrag = draggedItemRef.current
+    if (!activeDrag) return
+    if (activeDrag.type === type && activeDrag.item.id === item.id) return
 
     // Mouse pozisiyasına görə above/below təyin et
     const rect = e.currentTarget.getBoundingClientRect()
@@ -111,7 +165,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     const height = rect.height
     const position = y < height / 2 ? 'above' : 'below'
 
-    setDropTarget({ type, item, parentInfo, position })
+    const target = { type, item, parentInfo, position }
+    dropTargetRef.current = target
+    setDropTarget(target)
   }
 
   // Drag leave - sahəni tərk edəndə
@@ -120,6 +176,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     e.stopPropagation()
     // Yalnız parent-ə çıxanda target-i sil
     if (!e.currentTarget.contains(e.relatedTarget)) {
+      dropTargetRef.current = null
       setDropTarget(null)
     }
   }
@@ -130,16 +187,29 @@ const Sidebar = ({ isOpen, onClose }) => {
     e.stopPropagation()
 
     // TaskDetail-dən task drop edilib?
-    const taskData = e.dataTransfer.getData('application/task')
+    const taskData =
+      e.dataTransfer.getData('application/task') || e.dataTransfer.getData('text/plain')
     if (taskData && targetType === 'list') {
       try {
-        const { task } = JSON.parse(taskData)
-        await updateTask({
+        const parsed = JSON.parse(taskData)
+        if (parsed?.type !== 'task' || !parsed?.task?.id) {
+          handleDragEnd()
+          return
+        }
+        const { task } = parsed
+        if (Number(task.taskListId) === Number(targetItem.id)) {
+          handleDragEnd()
+          return
+        }
+        const payload = {
           id: task.id,
-          taskListId: targetItem.id
-        }).unwrap()
+          taskListId: targetItem.id,
+        }
+        if (task.parentId) {
+          payload.parentId = null
+        }
+        await updateTask(payload).unwrap()
         toast.success(`"${task.title}" tapşırığı köçürüldü!`)
-        // RTK Query cache-ni invalidate et
         dispatch(adminApi.util.invalidateTags(['Tasks', 'TaskLists']))
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
@@ -148,9 +218,22 @@ const Sidebar = ({ isOpen, onClose }) => {
       return
     }
 
-    if (!draggedItem) return
+    let activeDrag = draggedItemRef.current
+    if (!activeDrag) {
+      try {
+        const raw = e.dataTransfer.getData('text/plain')
+        if (raw) activeDrag = JSON.parse(raw)
+      } catch {
+        activeDrag = null
+      }
+    }
+    if (!activeDrag) {
+      handleDragEnd()
+      return
+    }
 
-    const { type: sourceType, item: sourceItem, parentInfo: sourceParentInfo } = draggedItem
+    const { type: sourceType, item: sourceItem, parentInfo: sourceParentInfo } = activeDrag
+    const activeDropTarget = dropTargetRef.current
 
     // Eyni item-in üzərinə drop etmə
     if (sourceType === targetType && sourceItem.id === targetItem.id) {
@@ -161,16 +244,18 @@ const Sidebar = ({ isOpen, onClose }) => {
     try {
       // SPACE -> SPACE: Reorder spaces
       if (sourceType === 'space' && targetType === 'space') {
-        const spaceIds = spaces.map(s => s.id)
+        const spaceIds = sortByOrder(spaces).map(s => s.id)
         const fromIndex = spaceIds.indexOf(sourceItem.id)
         let toIndex = spaceIds.indexOf(targetItem.id)
         if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
           spaceIds.splice(fromIndex, 1)
           // Position-a görə düzəlt
           if (fromIndex < toIndex) toIndex--
-          if (dropTarget?.position === 'below') toIndex++
+          if (activeDropTarget?.position === 'below') toIndex++
           spaceIds.splice(toIndex, 0, sourceItem.id)
-          await reorderSpaces(spaceIds).unwrap()
+          await runReorderWithFeedback('Sahələr sıralanır...', () =>
+            reorderSpaces(spaceIds).unwrap()
+          )
         }
       }
 
@@ -183,16 +268,18 @@ const Sidebar = ({ isOpen, onClose }) => {
           // Eyni space içində reorder
           const space = spaces.find(s => s.id === sourceSpaceId)
           if (space?.folders) {
-            const folderIds = space.folders.map(f => f.id)
+            const folderIds = sortByOrder(space.folders).map(f => f.id)
             const fromIndex = folderIds.indexOf(sourceItem.id)
             let toIndex = folderIds.indexOf(targetItem.id)
             if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
               folderIds.splice(fromIndex, 1)
               // Position-a görə düzəlt
               if (fromIndex < toIndex) toIndex--
-              if (dropTarget?.position === 'below') toIndex++
+              if (activeDropTarget?.position === 'below') toIndex++
               folderIds.splice(toIndex, 0, sourceItem.id)
-              await reorderFolders({ spaceId: sourceSpaceId, folderIds }).unwrap()
+              await runReorderWithFeedback('Qovluqlar sıralanır...', () =>
+                reorderFolders({ spaceId: sourceSpaceId, folderIds }).unwrap()
+              )
             }
           }
         } else {
@@ -228,10 +315,10 @@ const Sidebar = ({ isOpen, onClose }) => {
           if (isSameFolder) {
             const space = spaces.find(s => s.folders?.some(f => f.id === sourceFolderId))
             const folder = space?.folders?.find(f => f.id === sourceFolderId)
-            lists = folder?.taskLists || []
+            lists = getFolderTaskLists(folder)
           } else {
             const space = spaces.find(s => s.id === sourceSpaceId)
-            lists = space?.taskLists || []
+            lists = getDirectTaskLists(space)
           }
 
           const listIds = lists.map(l => l.id)
@@ -242,9 +329,11 @@ const Sidebar = ({ isOpen, onClose }) => {
             listIds.splice(fromIndex, 1)
             // Position-a görə düzəlt
             if (fromIndex < toIndex) toIndex--
-            if (dropTarget?.position === 'below') toIndex++
+            if (activeDropTarget?.position === 'below') toIndex++
             listIds.splice(toIndex, 0, sourceItem.id)
-            await reorderTaskLists(listIds).unwrap()
+            await runReorderWithFeedback('Siyahılar sıralanır...', () =>
+              reorderTaskLists(listIds).unwrap()
+            )
           }
         } else {
           // Fərqli konteynerə köçür
@@ -609,8 +698,41 @@ const Sidebar = ({ isOpen, onClose }) => {
                   </button>
                 </div>
 
+                {isReordering && (
+                  <div
+                    className="mx-2 mb-2 flex items-center gap-2 rounded-md border border-blue-200 bg-white/90 px-2.5 py-2 text-xs font-medium text-blue-800 shadow-sm"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <svg
+                      className="h-4 w-4 shrink-0 animate-spin text-blue-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      aria-hidden
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    <span>{reorderStatusLabel}</span>
+                  </div>
+                )}
+
                 {/* Spaces */}
-                <ul className="space-y-1">
+                <ul
+                  className={`space-y-1 relative ${isReordering ? 'pointer-events-none opacity-60' : ''}`}
+                  aria-busy={isReordering}
+                >
                   {filteredSpaces.length === 0 ? (
                     <li className="px-3 py-2 text-xs text-gray-500">
                       {searchQuery ? 'Nəticə tapılmadı' : 'Sahə yoxdur'}
@@ -635,6 +757,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                         onUpdateSpace={updateSpace}
                         draggedItem={draggedItem}
                         dropTarget={dropTarget}
+                        isReordering={isReordering}
                         onDragStart={handleDragStart}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
@@ -699,6 +822,7 @@ const SpaceItem = ({
   onUpdateSpace,
   draggedItem,
   dropTarget,
+  isReordering,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -707,8 +831,8 @@ const SpaceItem = ({
   isDropTarget,
   getDropIndicatorClass,
 }) => {
-  const folders = space.folders || []
-  const directLists = space.taskLists || []
+  const folders = sortByOrder(space.folders)
+  const directLists = getDirectTaskLists(space)
 
   const [createFolder, { isLoading: isCreatingFolder }] = useCreateFolderMutation()
   const [updateFolder, { isLoading: isUpdatingFolder }] = useUpdateFolderMutation()
@@ -967,7 +1091,10 @@ const SpaceItem = ({
   }
 
   const isDragging = draggedItem?.type === 'space' && draggedItem?.item?.id === space.id
-  const canDropHere = draggedItem && (draggedItem.type === 'space' || draggedItem.type === 'folder' || draggedItem.type === 'list')
+  const canDropHere =
+    !isReordering &&
+    draggedItem &&
+    (draggedItem.type === 'space' || draggedItem.type === 'folder' || draggedItem.type === 'list')
   const isCurrentDropTarget = isDropTarget('space', space.id)
 
   return (
@@ -977,7 +1104,7 @@ const SpaceItem = ({
       className={isDragging ? 'opacity-50' : ''}
     >
       <div
-        draggable
+        draggable={!isReordering}
         onDragStart={(e) => onDragStart(e, 'space', space, null)}
         onDragOver={(e) => canDropHere && onDragOver(e, 'space', space, null)}
         onDragLeave={onDragLeave}
@@ -1082,6 +1209,7 @@ const SpaceItem = ({
                   location={location}
                   onUpdateFolder={updateFolder}
                   draggedItem={draggedItem}
+                  isReordering={isReordering}
                   onDragStart={onDragStart}
                   onDragOver={onDragOver}
                   onDragLeave={onDragLeave}
@@ -1095,7 +1223,7 @@ const SpaceItem = ({
               {/* Birbaşa Space-ə bağlı list-lər */}
               {directLists.map((list) => {
                 const isListDragging = draggedItem?.type === 'list' && draggedItem?.item?.id === list.id
-                const canDropList = draggedItem?.type === 'list'
+                const canDropList = !isReordering && draggedItem?.type === 'list'
                 const isListCurrentDropTarget = isDropTarget('list', list.id)
                 return (
                 <li
@@ -1105,7 +1233,7 @@ const SpaceItem = ({
                   className={`group ${isListDragging ? 'opacity-50' : ''}`}
                 >
                   <div
-                    draggable
+                    draggable={!isReordering}
                     onDragStart={(e) => onDragStart(e, 'list', list, { spaceId: space.id, folderId: null })}
                     onDragOver={(e) => onDragOver(e, 'list', list, { spaceId: space.id, folderId: null })}
                     onDragLeave={onDragLeave}
@@ -1266,6 +1394,7 @@ const FolderItem = ({
   location,
   onUpdateFolder,
   draggedItem,
+  isReordering,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -1274,7 +1403,7 @@ const FolderItem = ({
   isDropTarget,
   getDropIndicatorClass,
 }) => {
-  const taskLists = folder.taskLists || []
+  const taskLists = getFolderTaskLists(folder)
 
   const [createTaskList, { isLoading: isCreatingList }] = useCreateTaskListMutation()
   const [updateTaskList, { isLoading: isUpdatingList }] = useUpdateTaskListMutation()
@@ -1418,7 +1547,8 @@ const FolderItem = ({
   }
 
   const isFolderDragging = draggedItem?.type === 'folder' && draggedItem?.item?.id === folder.id
-  const canDropHere = draggedItem && (draggedItem.type === 'folder' || draggedItem.type === 'list')
+  const canDropHere =
+    !isReordering && draggedItem && (draggedItem.type === 'folder' || draggedItem.type === 'list')
   const isFolderCurrentDropTarget = isDropTarget('folder', folder.id)
 
   return (
@@ -1428,7 +1558,7 @@ const FolderItem = ({
       className={isFolderDragging ? 'opacity-50' : ''}
     >
       <div
-        draggable
+        draggable={!isReordering}
         onDragStart={(e) => onDragStart(e, 'folder', folder, spaceId)}
         onDragOver={(e) => canDropHere && onDragOver(e, 'folder', folder, spaceId)}
         onDragLeave={onDragLeave}
@@ -1528,7 +1658,7 @@ const FolderItem = ({
             <>
               {taskLists.map((list) => {
                 const isListDragging = draggedItem?.type === 'list' && draggedItem?.item?.id === list.id
-                const canDropList = draggedItem?.type === 'list'
+                const canDropList = !isReordering && draggedItem?.type === 'list'
                 const isListCurrentDropTarget = isDropTarget('list', list.id)
                 return (
                 <li
@@ -1538,7 +1668,7 @@ const FolderItem = ({
                   className={`group ${isListDragging ? 'opacity-50' : ''}`}
                 >
                   <div
-                    draggable
+                    draggable={!isReordering}
                     onDragStart={(e) => onDragStart(e, 'list', list, { folderId: folder.id, spaceId: null })}
                     onDragOver={(e) => onDragOver(e, 'list', list, { folderId: folder.id, spaceId: null })}
                     onDragLeave={onDragLeave}
@@ -1665,8 +1795,6 @@ const TaskListFormModal = ({
   const { data: users = [] } = adminApi.useGetUsersQuery()
   const [name, setName] = useState('')
   const [selectedAssignees, setSelectedAssignees] = useState([])
-  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
-
   useEffect(() => {
     if (isOpen) {
       if (list) {
@@ -1741,35 +1869,11 @@ const TaskListFormModal = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             İstifadəçilər
           </label>
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
-              className="w-full px-3 py-2 text-sm text-left border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-            >
-              {selectedAssignees.length > 0
-                ? `${selectedAssignees.length} istifadəçi seçildi`
-                : 'İstifadəçi seçin...'}
-            </button>
-            {showAssigneeDropdown && (
-              <div className="w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                {users.map(user => (
-                  <label
-                    key={user.id}
-                    className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAssignees.includes(user.id)}
-                      onChange={() => toggleAssignee(user.id)}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">{user.username || user.email}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          <AssigneeMultiSelect
+            users={users}
+            selectedIds={selectedAssignees}
+            onToggle={toggleAssignee}
+          />
           {selectedAssignees.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {selectedAssignees.map(userId => {
@@ -1832,7 +1936,6 @@ const FolderFormModal = ({
     description: '',
   })
   const [selectedAssignees, setSelectedAssignees] = useState([])
-  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -1933,35 +2036,11 @@ const FolderFormModal = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             İstifadəçilər
           </label>
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
-              className="w-full px-3 py-2 text-sm text-left border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-            >
-              {selectedAssignees.length > 0
-                ? `${selectedAssignees.length} istifadəçi seçildi`
-                : 'İstifadəçi seçin...'}
-            </button>
-            {showAssigneeDropdown && (
-              <div className="w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                {users.map(user => (
-                  <label
-                    key={user.id}
-                    className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAssignees.includes(user.id)}
-                      onChange={() => toggleAssignee(user.id)}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">{user.username || user.email}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          <AssigneeMultiSelect
+            users={users}
+            selectedIds={selectedAssignees}
+            onToggle={toggleAssignee}
+          />
           {selectedAssignees.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {selectedAssignees.map(userId => {
@@ -2025,7 +2104,6 @@ const SpaceFormModal = ({
     description: '',
   })
   const [selectedAssignees, setSelectedAssignees] = useState([])
-  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -2128,35 +2206,11 @@ const SpaceFormModal = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             İstifadəçilər
           </label>
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
-              className="w-full px-3 py-2 text-sm text-left border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-            >
-              {selectedAssignees.length > 0
-                ? `${selectedAssignees.length} istifadəçi seçildi`
-                : 'İstifadəçi seçin...'}
-            </button>
-            {showAssigneeDropdown && (
-              <div className="w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                {users.map(user => (
-                  <label
-                    key={user.id}
-                    className="flex items-center px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAssignees.includes(user.id)}
-                      onChange={() => toggleAssignee(user.id)}
-                      className="mr-2"
-                    />
-                    <span className="text-sm">{user.username || user.email}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
+          <AssigneeMultiSelect
+            users={users}
+            selectedIds={selectedAssignees}
+            onToggle={toggleAssignee}
+          />
           {selectedAssignees.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {selectedAssignees.map(userId => {

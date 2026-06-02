@@ -78,6 +78,15 @@ export function formatShortDateTimeBaku(date) {
   return `${p.day} ${mo} ${p.year} ${p.hour}:${p.minute}`
 }
 
+/** Tapşırıq cədvəlində tarix sütunları — məs: "19 Mar 20:16" */
+export function formatInlineTableDate(raw) {
+  const date = parseServerTimestamp(raw)
+  if (!date) return '-'
+  const p = getBakuParts(date)
+  const mo = MONTHS_SHORT[p.month - 1]
+  return `${p.day} ${mo} ${p.hour}:${p.minute}`
+}
+
 /**
  * @param {'default' | 'short' | 'detail'} style — default: tam sözlər; short: bildiriş; detail: tapşırıq cədvəli
  */
@@ -154,12 +163,38 @@ export function ymdInBakuFromDate(date) {
 }
 
 /**
+ * Filtr dəyərini Bakı təqvimində YYYY-MM-DD formatına gətirir.
+ */
+export function normalizeFilterYmd(value) {
+  if (value == null || value === '') return ''
+  const s = String(value).trim()
+  if (!s || s === 'undefined') return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const date = parseServerTimestamp(s)
+  if (!date) return ''
+  return ymdInBakuFromDate(date)
+}
+
+/**
  * Filtr üçün: seçilmiş Bakı təqvim günü (YYYY-MM-DD) → UTC ISO sərhədləri
  */
 export function bakuYmdToUtcRange(ymd) {
-  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null
+  const normalized = normalizeFilterYmd(ymd)
+  if (!normalized) return null
   return {
-    start: new Date(`${ymd}T00:00:00.000+04:00`).toISOString(),
-    end: new Date(`${ymd}T23:59:59.999+04:00`).toISOString(),
+    start: new Date(`${normalized}T00:00:00.000+04:00`).toISOString(),
+    end: new Date(`${normalized}T23:59:59.999+04:00`).toISOString(),
   }
+}
+
+/**
+ * API filtri — Bakı təqvim günü (YYYY-MM-DD).
+ * Backend start/end of day-ı özü hesablayır (URL-də ISO + simvol problemi olmasın).
+ */
+export function filterStartDateParam(ymd) {
+  return normalizeFilterYmd(ymd)
+}
+
+export function filterEndDateParam(ymd) {
+  return normalizeFilterYmd(ymd)
 }

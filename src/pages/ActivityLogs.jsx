@@ -9,7 +9,8 @@ import { TaskStatusBadge, TaskStatusFilterDropdown } from '../components/TaskSta
 import ModalDatePicker from '../components/ModalDatePicker'
 import {
   formatFullDateTimeBaku,
-  bakuYmdToUtcRange,
+  filterEndDateParam,
+  filterStartDateParam,
   formatRelativeTimeAgo,
   parseServerTimestamp,
 } from '../utils/bakuTime'
@@ -90,10 +91,8 @@ const ActivityLogs = () => {
   const { data: currentUser } = useVerifyQuery()
   const isAdmin = currentUser?.role === 'admin'
 
-  const startDateParam = filters.startDate
-    ? bakuYmdToUtcRange(filters.startDate)?.start
-    : ''
-  const endDateParam = filters.endDate ? bakuYmdToUtcRange(filters.endDate)?.end : ''
+  const startDateParam = filterStartDateParam(filters.startDate)
+  const endDateParam = filterEndDateParam(filters.endDate)
 
   const { data, isLoading } = useGetActivityLogsQuery(
     {

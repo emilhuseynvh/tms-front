@@ -1,9 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useGetTaskActivitiesQuery, useGetUsersQuery, useGetTaskStatusesQuery } from '../services/adminApi'
-import { formatRelativeTimeAgo } from '../utils/bakuTime'
+import { formatShortDateTimeBaku, parseServerTimestamp } from '../utils/bakuTime'
 
-const formatDate = (dateString) => formatRelativeTimeAgo(dateString, 'default')
+const formatActivityTimestamp = (dateString) => {
+  const date = parseServerTimestamp(dateString)
+  if (!date) return '-'
+  return formatShortDateTimeBaku(date)
+}
 
 const getChangeLabel = (key, isFirstTime = false) => {
   if (key === 'created') {
@@ -355,7 +359,7 @@ const TaskActivityTooltip = ({ taskId, children }) => {
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {formatDate(activity.createdAt)}
+                        {formatActivityTimestamp(activity.createdAt)}
                       </span>
                     </div>
 

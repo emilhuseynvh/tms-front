@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useFlippedDropdownPosition } from '../hooks/useFlippedDropdownPosition'
 
 /** TaskStatuses.jsx ilə eyni ikon dəsti */
 export const TASK_STATUS_ICON_OPTIONS = [
@@ -47,7 +48,14 @@ export function TaskStatusFilterDropdown({ value, onChange, statuses, emptyLabel
   const [isOpen, setIsOpen] = useState(false)
   const buttonRef = useRef(null)
   const dropdownRef = useRef(null)
-  const [pos, setPos] = useState({ top: 0, left: 0 })
+
+  const pos = useFlippedDropdownPosition({
+    isOpen,
+    anchorRef: buttonRef,
+    dropdownRef,
+    estimatedHeight: 208,
+    minWidth: 200,
+  })
 
   const selected = value ? statuses.find((s) => String(s.id) === String(value)) : null
 
@@ -67,10 +75,6 @@ export function TaskStatusFilterDropdown({ value, onChange, statuses, emptyLabel
   }, [isOpen])
 
   const handleToggle = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect()
-      setPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 200) })
-    }
     setIsOpen(!isOpen)
   }
 

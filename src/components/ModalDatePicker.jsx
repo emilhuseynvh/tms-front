@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useFlippedDropdownPosition } from '../hooks/useFlippedDropdownPosition'
 import { todayYmdInBaku, ymdInBakuFromDate, getBakuParts } from '../utils/bakuTime'
 
 /** Tapşırıq modalındakı təqvim UI-si; `dateOnly` + `disablePastDays={false}` filtrlər üçün */
@@ -12,7 +13,6 @@ const ModalDatePicker = ({
   triggerClassName,
 }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)
   const now = new Date()
@@ -22,6 +22,22 @@ const ModalDatePicker = ({
   })
   const triggerRef = useRef(null)
   const dropdownRef = useRef(null)
+
+  const isMobileView =
+    typeof window !== 'undefined' && window.innerWidth < 640
+  const panelWidth = isMobileView ? window.innerWidth - 32 : 520
+  const panelHeight = isMobileView ? 500 : 420
+
+  const position = useFlippedDropdownPosition({
+    isOpen,
+    anchorRef: triggerRef,
+    dropdownRef,
+    estimatedHeight: panelHeight,
+    width: panelWidth,
+    viewportPadding: 16,
+    fixedLeft: isMobileView ? 16 : undefined,
+    deps: [isMobileView],
+  })
 
   useEffect(() => {
     if (value) {
@@ -66,32 +82,6 @@ const ModalDatePicker = ({
       })
     }
   }, [isOpen, value])
-
-  useEffect(() => {
-    if (isOpen && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      const isMobileView = window.innerWidth < 640
-      const dropdownWidth = isMobileView ? window.innerWidth - 32 : 520
-      const dropdownHeight = isMobileView ? 500 : 420
-
-      let top = rect.bottom + 4
-      let left = isMobileView ? 16 : rect.left
-
-      if (top + dropdownHeight > window.innerHeight) {
-        top = Math.max(16, rect.top - dropdownHeight - 4)
-      }
-
-      if (!isMobileView && left + dropdownWidth > window.innerWidth) {
-        left = window.innerWidth - dropdownWidth - 16
-      }
-
-      if (left < 16) {
-        left = 16
-      }
-
-      setPosition({ top, left, width: dropdownWidth })
-    }
-  }, [isOpen])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
