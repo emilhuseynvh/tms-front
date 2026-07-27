@@ -199,7 +199,7 @@ export const adminApi = createApi({
         url: `/api/folder/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Folders', 'Trash', 'ActivityLogs'],
+      invalidatesTags: ['Folders', 'Spaces', 'Trash', 'ActivityLogs'],
     }),
 
     reorderFolders: builder.mutation({
@@ -272,7 +272,7 @@ export const adminApi = createApi({
         url: `/api/task-list/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['TaskLists', 'Trash', 'ActivityLogs'],
+      invalidatesTags: ['TaskLists', 'Spaces', 'Folders', 'Trash', 'ActivityLogs'],
     }),
 
     reorderTaskLists: builder.mutation({
@@ -441,7 +441,7 @@ export const adminApi = createApi({
         url: `/api/trash/restore/folder/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Trash', 'Folders', 'ActivityLogs'],
+      invalidatesTags: ['Trash', 'Folders', 'Spaces', 'ActivityLogs'],
     }),
 
     restoreList: builder.mutation({
@@ -449,7 +449,7 @@ export const adminApi = createApi({
         url: `/api/trash/restore/list/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Trash', 'TaskLists', 'ActivityLogs'],
+      invalidatesTags: ['Trash', 'TaskLists', 'Spaces', 'Folders', 'ActivityLogs'],
     }),
 
     restoreTask: builder.mutation({
@@ -575,7 +575,7 @@ export const adminApi = createApi({
         url: `/api/archive/folder/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Archive', 'Folders'],
+      invalidatesTags: ['Archive', 'Folders', 'Spaces'],
     }),
 
     unarchiveFolder: builder.mutation({
@@ -583,7 +583,7 @@ export const adminApi = createApi({
         url: `/api/archive/unarchive/folder/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Archive', 'Folders'],
+      invalidatesTags: ['Archive', 'Folders', 'Spaces'],
     }),
 
     archiveList: builder.mutation({
@@ -591,7 +591,7 @@ export const adminApi = createApi({
         url: `/api/archive/list/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Archive', 'TaskLists'],
+      invalidatesTags: ['Archive', 'TaskLists', 'Spaces', 'Folders'],
     }),
 
     unarchiveList: builder.mutation({
@@ -599,7 +599,7 @@ export const adminApi = createApi({
         url: `/api/archive/unarchive/list/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Archive', 'TaskLists'],
+      invalidatesTags: ['Archive', 'TaskLists', 'Spaces', 'Folders'],
     }),
 
     archiveTask: builder.mutation({

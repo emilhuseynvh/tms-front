@@ -116,6 +116,51 @@ const Sidebar = ({ isOpen, onClose }) => {
   const [dropTarget, setDropTarget] = useState(null)
   const draggedItemRef = useRef(null)
   const dropTargetRef = useRef(null)
+  const navScrollRef = useRef(null)
+  const autoScrollFrameRef = useRef(null)
+  const autoScrollSpeedRef = useRef(0)
+
+  // Drag zamanı sidebar-ın yuxarı/aşağı kənarına yaxınlaşanda avtomatik scroll
+  const stopAutoScroll = useCallback(() => {
+    autoScrollSpeedRef.current = 0
+    if (autoScrollFrameRef.current) {
+      cancelAnimationFrame(autoScrollFrameRef.current)
+      autoScrollFrameRef.current = null
+    }
+  }, [])
+
+  const lastDragOverAtRef = useRef(0)
+
+  const stepAutoScroll = useCallback(() => {
+    const el = navScrollRef.current
+    // Dragover hadisələri kəsilibsə (drag ləğv olunub), scroll-u dayandır
+    if (!el || autoScrollSpeedRef.current === 0 || performance.now() - lastDragOverAtRef.current > 600) {
+      autoScrollFrameRef.current = null
+      return
+    }
+    el.scrollTop += autoScrollSpeedRef.current
+    autoScrollFrameRef.current = requestAnimationFrame(stepAutoScroll)
+  }, [])
+
+  const handleNavAutoScroll = useCallback((e) => {
+    lastDragOverAtRef.current = performance.now()
+    const el = navScrollRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const threshold = 60
+    let speed = 0
+    if (e.clientY < rect.top + threshold) {
+      speed = -Math.ceil((threshold - (e.clientY - rect.top)) / 8)
+    } else if (e.clientY > rect.bottom - threshold) {
+      speed = Math.ceil((threshold - (rect.bottom - e.clientY)) / 8)
+    }
+    autoScrollSpeedRef.current = speed
+    if (speed !== 0 && !autoScrollFrameRef.current) {
+      autoScrollFrameRef.current = requestAnimationFrame(stepAutoScroll)
+    }
+  }, [stepAutoScroll])
+
+  useEffect(() => stopAutoScroll, [stopAutoScroll])
 
   // Drag start - item-i tutub başlayanda
   const handleDragStart = (e, type, item, parentInfo = null) => {
@@ -137,6 +182,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     dropTargetRef.current = null
     setDraggedItem(null)
     setDropTarget(null)
+    stopAutoScroll()
   }
 
   // Drag over - üzərindən keçəndə
@@ -615,7 +661,15 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-6 overflow-y-auto">
+      <nav
+        ref={navScrollRef}
+        onDragOverCapture={handleNavAutoScroll}
+        onDropCapture={stopAutoScroll}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) stopAutoScroll()
+        }}
+        className="flex-1 px-3 py-6 overflow-y-auto"
+      >
         <ul className="space-y-1">
           {navItems.map((item) => (
             <li key={item.path}>

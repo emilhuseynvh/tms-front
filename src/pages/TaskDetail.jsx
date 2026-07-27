@@ -120,6 +120,7 @@ const TaskDetail = () => {
   const hoverTimeoutRef = useRef(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [isAddingTask, setIsAddingTask] = useState(false)
+  const [scrollToTaskId, setScrollToTaskId] = useState(null)
   const [editingField, setEditingField] = useState(null) // {taskId, field}
   const [editingValue, setEditingValue] = useState('')
   const newTaskInputRef = useRef(null)
@@ -355,6 +356,7 @@ const TaskDetail = () => {
           newSet.add(newTask.id)
           return newSet
         })
+        setScrollToTaskId(newTask.id)
       }
       setNewTaskTitle('')
       setIsAddingTask(false)
@@ -916,6 +918,16 @@ const TaskDetail = () => {
     }
   }, [isAddingTask])
 
+  // Yeni yaradılan task render olunandan sonra ona scroll et
+  useEffect(() => {
+    if (!scrollToTaskId) return
+    const el = document.querySelector(`[data-task-id="${scrollToTaskId}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setScrollToTaskId(null)
+    }
+  }, [scrollToTaskId, tasks])
+
   // Bütün taskları (subtasklar daxil) avtomatik aç
   useEffect(() => {
     if (tasks && tasks.length > 0) {
@@ -963,6 +975,7 @@ const TaskDetail = () => {
       <>
         <tr
           key={task.id}
+          data-task-id={task.id}
           draggable
           onDragStart={(e) => handleDragStart(e, task, index)}
           onDragOver={(e) => handleDragOver(e, task)}
@@ -1450,9 +1463,13 @@ const TaskDetail = () => {
               <nav className="flex items-center text-sm md:text-base">
                 {(taskListData?.folder?.space || taskListData?.space) && (
                   <>
-                    <span className="text-gray-500 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/tasks/space/${spaceId || taskListData?.folder?.space?.id || taskListData?.space?.id}`)}
+                      className="text-gray-500 font-medium hover:text-blue-600 hover:underline transition-colors"
+                    >
                       {taskListData?.folder?.space?.name || taskListData?.space?.name}
-                    </span>
+                    </button>
                     <svg className="w-4 h-4 mx-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
@@ -1460,9 +1477,13 @@ const TaskDetail = () => {
                 )}
                 {taskListData?.folder && (
                   <>
-                    <span className="text-gray-500 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/tasks/space/${spaceId || taskListData?.folder?.space?.id}/folder/${folderId || taskListData.folder.id}`)}
+                      className="text-gray-500 font-medium hover:text-blue-600 hover:underline transition-colors"
+                    >
                       {taskListData.folder.name}
-                    </span>
+                    </button>
                     <svg className="w-4 h-4 mx-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
@@ -1979,6 +2000,7 @@ const TaskDetail = () => {
         createTask={createTask}
         updateTask={updateTask}
         setExpandedTasks={setExpandedTasks}
+        onTaskCreated={setScrollToTaskId}
       />
 
       {/* Task List Edit Modal */}
@@ -2116,6 +2138,7 @@ const TaskFormModal = ({
   createTask,
   updateTask,
   setExpandedTasks,
+  onTaskCreated,
 }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -2241,6 +2264,9 @@ const TaskFormModal = ({
             newSet.add(newTask.id)
             return newSet
           })
+        }
+        if (newTask?.id && onTaskCreated) {
+          onTaskCreated(newTask.id)
         }
         toast.success('Tapşırıq yaradıldı!')
       }
