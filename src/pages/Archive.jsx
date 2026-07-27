@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useGetArchiveQuery,
   useUnarchiveSpaceMutation,
@@ -50,6 +50,8 @@ const getTypeIcon = (type) => {
   }
 }
 
+const getItemKey = (item) => `${item.type}-${item.id}`
+
 const Archive = () => {
   const { data, isLoading } = useGetArchiveQuery()
   const { data: currentUser } = useVerifyQuery()
@@ -59,6 +61,7 @@ const Archive = () => {
   const [unarchiveTask, { isLoading: isUnarchivingTask }] = useUnarchiveTaskMutation()
 
   const [selectedUserId, setSelectedUserId] = useState('all')
+  const [selectedItems, setSelectedItems] = useState(new Set())
 
   const isAdmin = currentUser?.role === 'admin'
 
@@ -110,6 +113,59 @@ const Archive = () => {
     if (selectedUserId === 'all') return allItems
     return allItems.filter(item => item.archivedBy?.id === Number(selectedUserId))
   }, [allItems, selectedUserId])
+
+  useEffect(() => {
+    setSelectedItems(new Set())
+  }, [selectedUserId])
+
+  const handleItemSelect = (key, checked) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev)
+      if (checked) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedItems(new Set(filteredItems.map(getItemKey)))
+    } else {
+      setSelectedItems(new Set())
+    }
+  }
+
+  const isAllSelected = useMemo(() => {
+    if (filteredItems.length === 0) return false
+    return filteredItems.every(item => selectedItems.has(getItemKey(item)))
+  }, [filteredItems, selectedItems])
+
+  const isIndeterminate = useMemo(() => {
+    if (filteredItems.length === 0) return false
+    const someSelected = filteredItems.some(item => selectedItems.has(getItemKey(item)))
+    return someSelected && !isAllSelected
+  }, [filteredItems, selectedItems, isAllSelected])
+
+  const getSelectedItemsList = () =>
+    filteredItems.filter(item => selectedItems.has(getItemKey(item)))
+
+  const handleBulkUnarchive = async () => {
+    const items = getSelectedItemsList()
+    if (items.length === 0) return
+
+    try {
+      for (const item of items) {
+        if (item.type === 'space') await unarchiveSpace(item.id).unwrap()
+        else if (item.type === 'folder') await unarchiveFolder(item.id).unwrap()
+        else if (item.type === 'list') await unarchiveList(item.id).unwrap()
+        else if (item.type === 'task') await unarchiveTask(item.id).unwrap()
+      }
+      setSelectedItems(new Set())
+      toast.success(`${items.length} element arxivdən çıxarıldı!`)
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
 
   const isUnarchiving = isUnarchivingSpace || isUnarchivingFolder || isUnarchivingList || isUnarchivingTask
 
@@ -164,10 +220,61 @@ const Archive = () => {
           <p className="text-sm sm:text-base text-gray-500">Arxiv boşdur</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
-          {filteredItems.map((item) => (
-            <div key={`${item.type}-${item.id}`} className="p-3 sm:p-4 hover:bg-gray-50 transition-colors">
+        <>
+          {selectedItems.size > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium text-gray-700">
+                {selectedItems.size} element seçildi
+              </span>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:ml-auto">
+                <button
+                  onClick={handleBulkUnarchive}
+                  disabled={isUnarchiving}
+                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50"
+                >
+                  Arxivdən çıxar
+                </button>
+                <button
+                  onClick={() => setSelectedItems(new Set())}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Ləğv et
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+            <div className="px-3 sm:px-4 py-2.5 bg-gray-50 flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                ref={(input) => {
+                  if (input) input.indeterminate = isIndeterminate
+                }}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              />
+              <span className="text-xs sm:text-sm text-gray-500">Hamısını seç</span>
+            </div>
+
+            {filteredItems.map((item) => {
+              const itemKey = getItemKey(item)
+              const isSelected = selectedItems.has(itemKey)
+
+              return (
+            <div
+              key={itemKey}
+              className={`p-3 sm:p-4 transition-colors ${isSelected ? 'bg-blue-50 hover:bg-blue-50' : 'hover:bg-gray-50'}`}
+            >
               <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={(e) => handleItemSelect(itemKey, e.target.checked)}
+                  className="w-4 h-4 mt-1 sm:mt-0 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                />
+
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center text-base sm:text-lg flex-shrink-0">
                   {getTypeIcon(item.type)}
                 </div>
@@ -217,8 +324,10 @@ const Archive = () => {
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {filteredItems.length > 0 && (

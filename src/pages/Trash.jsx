@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useGetTrashQuery,
   useRestoreFolderMutation,
@@ -49,6 +49,8 @@ const getTypeIcon = (type) => {
   }
 }
 
+const getItemKey = (item) => `${item.type}-${item.id}`
+
 const Trash = () => {
   const { confirm } = useConfirm()
   const { data, isLoading } = useGetTrashQuery()
@@ -61,6 +63,7 @@ const Trash = () => {
   const [permanentDeleteTask] = usePermanentDeleteTaskMutation()
 
   const [selectedUserId, setSelectedUserId] = useState('all')
+  const [selectedItems, setSelectedItems] = useState(new Set())
 
   const isAdmin = currentUser?.role === 'admin'
 
@@ -137,6 +140,85 @@ const Trash = () => {
     return allItems.filter(item => item.deletedBy?.id === Number(selectedUserId))
   }, [allItems, selectedUserId])
 
+  useEffect(() => {
+    setSelectedItems(new Set())
+  }, [selectedUserId])
+
+  const handleItemSelect = (key, checked) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev)
+      if (checked) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedItems(new Set(filteredItems.map(getItemKey)))
+    } else {
+      setSelectedItems(new Set())
+    }
+  }
+
+  const isAllSelected = useMemo(() => {
+    if (filteredItems.length === 0) return false
+    return filteredItems.every(item => selectedItems.has(getItemKey(item)))
+  }, [filteredItems, selectedItems])
+
+  const isIndeterminate = useMemo(() => {
+    if (filteredItems.length === 0) return false
+    const someSelected = filteredItems.some(item => selectedItems.has(getItemKey(item)))
+    return someSelected && !isAllSelected
+  }, [filteredItems, selectedItems, isAllSelected])
+
+  const getSelectedItemsList = () =>
+    filteredItems.filter(item => selectedItems.has(getItemKey(item)))
+
+  const handleBulkRestore = async () => {
+    const items = getSelectedItemsList()
+    if (items.length === 0) return
+
+    try {
+      for (const item of items) {
+        if (item.type === 'folder') await restoreFolder(item.id).unwrap()
+        else if (item.type === 'list') await restoreList(item.id).unwrap()
+        else if (item.type === 'task') await restoreTask(item.id).unwrap()
+      }
+      setSelectedItems(new Set())
+      toast.success(`${items.length} element bərpa edildi!`)
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleBulkPermanentDelete = async () => {
+    const items = getSelectedItemsList()
+    if (items.length === 0) return
+
+    const confirmed = await confirm({
+      title: 'Həmişəlik sil',
+      message: `${items.length} element həmişəlik silinəcək. Bu əməliyyat geri alına bilməz. Davam etmək istəyirsiniz?`,
+      confirmText: 'Həmişəlik sil',
+      cancelText: 'Ləğv et',
+      type: 'danger'
+    })
+
+    if (!confirmed) return
+
+    try {
+      for (const item of items) {
+        if (item.type === 'folder') await permanentDeleteFolder(item.id).unwrap()
+        else if (item.type === 'list') await permanentDeleteList(item.id).unwrap()
+        else if (item.type === 'task') await permanentDeleteTask(item.id).unwrap()
+      }
+      setSelectedItems(new Set())
+      toast.success(`${items.length} element həmişəlik silindi!`)
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
   const isRestoring = isRestoringFolder || isRestoringList || isRestoringTask
 
   return (
@@ -152,7 +234,11 @@ const Trash = () => {
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Zibil qabı</h1>
             <p className="text-xs sm:text-sm text-gray-500">
-              <span className="hidden sm:inline">Silinmiş elementləri bərpa edin və ya həmişəlik silin</span>
+              <span className="hidden sm:inline">
+                {isAdmin
+                  ? 'Silinmiş elementləri bərpa edin və ya həmişəlik silin'
+                  : 'Silinmiş elementləri bərpa edin'}
+              </span>
               <span className="sm:hidden">Silinmiş elementlər</span>
               {filteredItems.length > 0 && <span className="ml-1 sm:ml-2 text-gray-400">({filteredItems.length})</span>}
             </p>
@@ -193,10 +279,69 @@ const Trash = () => {
           <p className="text-sm sm:text-base text-gray-500">Zibil qabı boşdur</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
-          {filteredItems.map((item) => (
-            <div key={`${item.type}-${item.id}`} className="p-3 sm:p-4 hover:bg-gray-50 transition-colors">
+        <>
+          {selectedItems.size > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <span className="text-sm font-medium text-gray-700">
+                {selectedItems.size} element seçildi
+              </span>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:ml-auto">
+                <button
+                  onClick={handleBulkRestore}
+                  disabled={isRestoring}
+                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  Bərpa et
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={handleBulkPermanentDelete}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                  >
+                    Həmişəlik sil
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedItems(new Set())}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Ləğv et
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+            <div className="px-3 sm:px-4 py-2.5 bg-gray-50 flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                ref={(input) => {
+                  if (input) input.indeterminate = isIndeterminate
+                }}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+              />
+              <span className="text-xs sm:text-sm text-gray-500">Hamısını seç</span>
+            </div>
+
+            {filteredItems.map((item) => {
+              const itemKey = getItemKey(item)
+              const isSelected = selectedItems.has(itemKey)
+
+              return (
+            <div
+              key={itemKey}
+              className={`p-3 sm:p-4 transition-colors ${isSelected ? 'bg-blue-50 hover:bg-blue-50' : 'hover:bg-gray-50'}`}
+            >
               <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={(e) => handleItemSelect(itemKey, e.target.checked)}
+                  className="w-4 h-4 mt-1 sm:mt-0 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                />
+
                 {/* Icon */}
                 <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center text-base sm:text-lg flex-shrink-0">
                   {getTypeIcon(item.type)}
@@ -231,16 +376,18 @@ const Trash = () => {
                     <button
                       onClick={() => handleRestore(item.type, item.id, item.name || item.title)}
                       disabled={isRestoring}
-                      className="flex-1 px-2 py-1.5 text-[10px] font-medium text-green-600 border border-green-200 rounded-md hover:bg-green-50 transition-colors disabled:opacity-50"
+                      className={`px-2 py-1.5 text-[10px] font-medium text-green-600 border border-green-200 rounded-md hover:bg-green-50 transition-colors disabled:opacity-50 ${isAdmin ? 'flex-1' : 'w-full'}`}
                     >
                       Bərpa et
                     </button>
-                    <button
-                      onClick={() => handlePermanentDelete(item.type, item.id, item.name || item.title)}
-                      className="flex-1 px-2 py-1.5 text-[10px] font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
-                    >
-                      Sil
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handlePermanentDelete(item.type, item.id, item.name || item.title)}
+                        className="flex-1 px-2 py-1.5 text-[10px] font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+                      >
+                        Sil
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -253,17 +400,21 @@ const Trash = () => {
                   >
                     Bərpa et
                   </button>
-                  <button
-                    onClick={() => handlePermanentDelete(item.type, item.id, item.name || item.title)}
-                    className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
-                  >
-                    Həmişəlik sil
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handlePermanentDelete(item.type, item.id, item.name || item.title)}
+                      className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+                    >
+                      Həmişəlik sil
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {/* Info */}
