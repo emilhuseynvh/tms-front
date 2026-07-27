@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useGetUsersQuery } from '../services/adminApi'
+import { useVerifyQuery } from '../services/authApi'
 import { useCreateGroupChatMutation } from '../services/chatApi'
 import { toast } from 'react-toastify'
 
@@ -10,11 +11,14 @@ const CreateGroupChatModal = ({ onClose, onCreated }) => {
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data: users = [], isLoading } = useGetUsersQuery()
+  const { data: currentUser } = useVerifyQuery()
   const [createGroupChat, { isLoading: isCreating }] = useCreateGroupChatMutation()
 
+  // Yaradan avtomatik qrupa əlavə olunur, ona görə siyahıda göstərilmir
   const filteredUsers = users.filter((user) =>
-    user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    user.id !== currentUser?.id &&
+    (user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
   const toggleUser = (userId) => {
@@ -45,7 +49,7 @@ const CreateGroupChatModal = ({ onClose, onCreated }) => {
       toast.success('Qrup yaradıldı')
       onCreated(result)
     } catch (error) {
-      toast.error('Xəta baş verdi')
+      toast.error(error?.data?.message || 'Xəta baş verdi')
       console.error('Failed to create group chat:', error)
     }
   }

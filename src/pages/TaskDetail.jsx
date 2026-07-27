@@ -136,8 +136,6 @@ const TaskDetail = () => {
     startDate: 160,
     endDate: 160,
     link: 180,
-    doc: 200,
-    meetingNotes: 200,
   })
   const [resizing, setResizing] = useState(null) // { column, startX, startWidth }
   const tableRef = useRef(null)
@@ -395,10 +393,6 @@ const TaskDetail = () => {
         payload.description = editingValue
       } else if (field === 'link') {
         payload.link = editingValue
-      } else if (field === 'doc') {
-        payload.doc = editingValue
-      } else if (field === 'meetingNotes') {
-        payload.meetingNotes = editingValue
       } else if (field === 'startAt') {
         payload.startAt = editingValue ? new Date(editingValue).toISOString() : null
       } else if (field === 'dueAt') {
@@ -845,8 +839,6 @@ const TaskDetail = () => {
             startAt: task.startAt ? new Date(task.startAt).toISOString() : new Date().toISOString(),
             dueAt: task.dueAt ? new Date(task.dueAt).toISOString() : null,
             link: task.link || null,
-            doc: task.doc || null,
-            meetingNotes: task.meetingNotes || null,
             assigneeIds: task.assignees?.map(a => a.id) || [],
             parentId: task.parentId || null,
           }
@@ -1168,71 +1160,11 @@ const TaskDetail = () => {
               </div>
             )}
           </td>
-          <td style={getColumnStyle('doc')} className="px-2 py-2">
-            {editingField?.taskId === task.id && editingField?.field === 'doc' ? (
-              <textarea
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onBlur={() => saveInlineEdit(task.id, 'doc')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setEditingField(null)
-                    setEditingValue('')
-                  }
-                }}
-                autoFocus
-                rows={2}
-                placeholder="Doc..."
-                className="w-full text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-              />
-            ) : (
-              <div
-                onClick={() => startEditing(task.id, 'doc', task.doc)}
-                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded"
-              >
-                {task.doc ? (
-                  <span className="text-xs text-gray-700 line-clamp-2">{task.doc}</span>
-                ) : (
-                  <span className="text-xs text-gray-300">-</span>
-                )}
-              </div>
-            )}
-          </td>
-          <td style={getColumnStyle('meetingNotes')} className="px-2 py-2">
-            {editingField?.taskId === task.id && editingField?.field === 'meetingNotes' ? (
-              <textarea
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onBlur={() => saveInlineEdit(task.id, 'meetingNotes')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setEditingField(null)
-                    setEditingValue('')
-                  }
-                }}
-                autoFocus
-                rows={2}
-                placeholder="Meeting Notes..."
-                className="w-full text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-              />
-            ) : (
-              <div
-                onClick={() => startEditing(task.id, 'meetingNotes', task.meetingNotes)}
-                className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded"
-              >
-                {task.meetingNotes ? (
-                  <span className="text-xs text-gray-700 line-clamp-2">{task.meetingNotes}</span>
-                ) : (
-                  <span className="text-xs text-gray-300">-</span>
-                )}
-              </div>
-            )}
-          </td>
         </tr>
         {/* Sub-task input row - shows when adding sub-task to this task */}
         {isAddingTask && parentTaskId === task.id && (
           <tr className="bg-blue-50 border-b border-blue-200">
-            <td colSpan={11} className="px-4 py-3">
+            <td colSpan={9} className="px-4 py-3">
               <form onSubmit={(e) => handleQuickCreate(e, parentTaskId)} className="flex items-center gap-2 max-w-xl" style={{ marginLeft: `${(depth + 1) * 20}px` }}>
                 <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
@@ -1792,18 +1724,6 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={getColumnStyle('doc')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    <div className="truncate">Doc</div>
-                    <div
-                      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
-                      onMouseDown={(e) => handleResizeStart(e, 'doc')}
-                    >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
-                    </div>
-                  </th>
-                  <th style={getColumnStyle('meetingNotes')} className="px-2 py-2 text-left text-xs font-medium text-gray-500">
-                    <div className="truncate">Meeting Notes</div>
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -2149,8 +2069,6 @@ const TaskFormModal = ({
     assigneeIds: [],
     parentId: 0,
     link: '',
-    doc: '',
-    meetingNotes: '',
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -2177,8 +2095,6 @@ const TaskFormModal = ({
         assigneeIds: task.assignees?.map(a => a.id) || [],
         parentId: task.parentId || 0,
         link: task.link || '',
-        doc: task.doc || '',
-        meetingNotes: task.meetingNotes || '',
       })
     } else {
       setFormData({
@@ -2190,8 +2106,6 @@ const TaskFormModal = ({
         assigneeIds: [],
         parentId: parentTaskId || 0,
         link: '',
-        doc: '',
-        meetingNotes: '',
       })
     }
   }, [task, taskListId, parentTaskId])
@@ -2240,8 +2154,6 @@ const TaskFormModal = ({
         delete payload.dueAt
       }
       if (!payload.link) delete payload.link
-      if (!payload.doc) delete payload.doc
-      if (!payload.meetingNotes) delete payload.meetingNotes
       if (!payload.description) delete payload.description
 
       if (task) {
@@ -2325,34 +2237,6 @@ const TaskFormModal = ({
             onChange={handleChange}
             placeholder="https://..."
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Doc
-          </label>
-          <textarea
-            name="doc"
-            value={formData.doc}
-            onChange={handleChange}
-            rows={3}
-            placeholder="Sənəd məzmunu..."
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Meeting Notes
-          </label>
-          <textarea
-            name="meetingNotes"
-            value={formData.meetingNotes}
-            onChange={handleChange}
-            rows={3}
-            placeholder="Görüş qeydləri..."
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
           />
         </div>
 

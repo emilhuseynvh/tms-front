@@ -159,13 +159,15 @@ const TaskLists = () => {
     ? [data?.space?.name, data?.name].filter(Boolean).join(' / ')
     : ''
 
-  const navigateToList = (listId) => {
+  const navigateToList = (listId, listType = 'list') => {
+    // Meeting note ayrı səhifədə açılır
+    const segment = listType === 'meeting' ? 'note' : 'list'
     if (folderId && !spaceId) {
-      navigate(`/tasks/folder/${folderId}/list/${listId}`)
+      navigate(`/tasks/folder/${folderId}/${segment}/${listId}`)
     } else if (folderId) {
-      navigate(`/tasks/space/${spaceId}/folder/${folderId}/list/${listId}`)
+      navigate(`/tasks/space/${spaceId}/folder/${folderId}/${segment}/${listId}`)
     } else {
-      navigate(`/tasks/space/${spaceId}/list/${listId}`)
+      navigate(`/tasks/space/${spaceId}/${segment}/${listId}`)
     }
   }
 
@@ -800,14 +802,14 @@ const TaskLists = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigateToList(list.id)}
+                          onClick={() => navigateToList(list.id, list.type)}
                           className="flex-1 min-w-0 text-left font-medium text-gray-900 hover:text-blue-600 truncate text-sm py-0.5"
                         >
                           {list.name}
                         </button>
                         <button
                           type="button"
-                          onClick={() => navigateToList(list.id)}
+                          onClick={() => navigateToList(list.id, list.type)}
                           className="hidden sm:inline text-xs text-blue-600 hover:underline shrink-0 px-2"
                         >
                           + Tapşırıq əlavə et
@@ -870,7 +872,7 @@ const TaskLists = () => {
                                   <tr
                                     key={task.id}
                                     className="hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => navigateToList(list.id)}
+                                    onClick={() => navigateToList(list.id, list.type)}
                                   >
                                     <td className="px-3 py-2 align-top">
                                       <div className="flex items-start gap-2 min-w-0">

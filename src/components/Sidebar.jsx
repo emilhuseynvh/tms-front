@@ -32,9 +32,21 @@ import { disconnectSocket } from '../hooks/useWebSocket'
 
 // Path-dan list ID və folder ID-ni çıxarır
 const getListIdFromPath = (pathname) => {
-  const match = pathname.match(/\/list\/(\d+)/)
+  const match = pathname.match(/\/(?:list|note)\/(\d+)/)
   return match ? parseInt(match[1], 10) : null
 }
+
+// List item-in kliklənəndə hansı URL-ə aparacağını təyin edir (meeting note ayrı səhifə açır)
+const getListPath = (list, spaceId, folderId = null) => {
+  const base = folderId ? `/tasks/space/${spaceId}/folder/${folderId}` : `/tasks/space/${spaceId}`
+  return list.type === 'meeting' ? `${base}/note/${list.id}` : `${base}/list/${list.id}`
+}
+
+const MeetingNoteIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+)
 
 const getFolderIdFromPath = (pathname) => {
   const match = pathname.match(/\/folder\/(\d+)/)
@@ -906,6 +918,7 @@ const SpaceItem = ({
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState(null)
   const [isDirectListModalOpen, setIsDirectListModalOpen] = useState(false)
+  const [newListType, setNewListType] = useState('list')
   const [editingList, setEditingList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const addMenuRef = useRef(null)
@@ -1293,7 +1306,7 @@ const SpaceItem = ({
                     onDragLeave={onDragLeave}
                     onDragEnd={onDragEnd}
                     onDrop={(e) => onDrop(e, 'list', list, { spaceId: space.id, folderId: null })}
-                    onClick={() => editingListId !== list.id && onNavigate(`/tasks/space/${space.id}/list/${list.id}`)}
+                    onClick={() => editingListId !== list.id && onNavigate(getListPath(list, space.id))}
                     className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-pointer ${
                       getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === null
                         ? 'bg-blue-100 text-blue-800 font-medium'
@@ -1301,14 +1314,18 @@ const SpaceItem = ({
                     } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <svg
-                        className="w-4 h-4 shrink-0 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
+                      {list.type === 'meeting' ? (
+                        <MeetingNoteIcon className="w-4 h-4 shrink-0 text-gray-400" />
+                      ) : (
+                        <svg
+                          className="w-4 h-4 shrink-0 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      )}
                       {editingListId === list.id ? (
                         <input
                           ref={listInputRef}
@@ -1383,13 +1400,20 @@ const SpaceItem = ({
                       Qovluq
                     </button>
                     <button
-                      onClick={() => { setIsDirectListModalOpen(true); setAddMenuOpen(false) }}
+                      onClick={() => { setNewListType('list'); setIsDirectListModalOpen(true); setAddMenuOpen(false) }}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                       Siyahı
+                    </button>
+                    <button
+                      onClick={() => { setNewListType('meeting'); setIsDirectListModalOpen(true); setAddMenuOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+                    >
+                      <MeetingNoteIcon className="w-4 h-4" />
+                      Meeting Note
                     </button>
                   </div>
                 )}
@@ -1416,11 +1440,12 @@ const SpaceItem = ({
         onClose={handleCloseListModal}
         spaceId={space.id}
         list={editingList}
+        listType={newListType}
         createTaskList={createTaskList}
         updateTaskList={updateTaskList}
         isCreating={isCreatingList}
         isUpdating={isUpdatingList}
-        onListCreated={(listId) => onNavigate(`/tasks/space/${space.id}/list/${listId}`)}
+        onListCreated={(listId) => onNavigate(newListType === 'meeting' ? `/tasks/space/${space.id}/note/${listId}` : `/tasks/space/${space.id}/list/${listId}`)}
       />
 
       {/* Space Assignee Modal */}
@@ -1728,7 +1753,7 @@ const FolderItem = ({
                     onDragLeave={onDragLeave}
                     onDragEnd={onDragEnd}
                     onDrop={(e) => onDrop(e, 'list', list, { folderId: folder.id, spaceId: null })}
-                    onClick={() => editingListId !== list.id && onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${list.id}`)}
+                    onClick={() => editingListId !== list.id && onNavigate(getListPath(list, spaceId, folder.id))}
                     className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer ${
                       getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === folder.id
                         ? 'bg-blue-100 text-blue-800 font-medium'
@@ -1736,14 +1761,18 @@ const FolderItem = ({
                     } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <svg
-                        className="w-4 h-4 shrink-0 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
+                      {list.type === 'meeting' ? (
+                        <MeetingNoteIcon className="w-4 h-4 shrink-0 text-gray-400" />
+                      ) : (
+                        <svg
+                          className="w-4 h-4 shrink-0 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      )}
                       {editingListId === list.id ? (
                         <input
                           ref={listInputRef}
@@ -1840,12 +1869,15 @@ const TaskListFormModal = ({
   folderId,
   spaceId,
   list,
+  listType = 'list',
   createTaskList,
   updateTaskList,
   isCreating,
   isUpdating,
   onListCreated,
 }) => {
+  const isMeeting = (list ? list.type : listType) === 'meeting'
+  const entityLabel = isMeeting ? 'Meeting note' : 'Siyahı'
   const { data: users = [] } = adminApi.useGetUsersQuery()
   const [name, setName] = useState('')
   const [selectedAssignees, setSelectedAssignees] = useState([])
@@ -1876,17 +1908,17 @@ const TaskListFormModal = ({
     try {
       if (list) {
         await updateTaskList({ id: list.id, name: name.trim(), assigneeIds: selectedAssignees }).unwrap()
-        toast.success('Siyahı yeniləndi!')
+        toast.success(`${entityLabel} yeniləndi!`)
         onClose()
       } else {
-        const payload = { name: name.trim(), assigneeIds: selectedAssignees }
+        const payload = { name: name.trim(), assigneeIds: selectedAssignees, type: listType }
         if (folderId) {
           payload.folderId = folderId
         } else if (spaceId) {
           payload.spaceId = spaceId
         }
         const newList = await createTaskList(payload).unwrap()
-        toast.success('Siyahı yaradıldı!')
+        toast.success(`${entityLabel} yaradıldı!`)
         onClose()
         if (onListCreated && newList?.id) {
           onListCreated(newList.id)
@@ -1901,12 +1933,12 @@ const TaskListFormModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={list ? 'Siyahını redaktə et' : 'Yeni siyahı'}
+      title={list ? `${entityLabel} redaktə et` : (isMeeting ? 'Yeni meeting note' : 'Yeni siyahı')}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Siyahı adı
+            {isMeeting ? 'Meeting note adı' : 'Siyahı adı'}
           </label>
           <input
             type="text"
@@ -1914,7 +1946,7 @@ const TaskListFormModal = ({
             onChange={(e) => setName(e.target.value)}
             required
             autoFocus
-            placeholder="Məsələn: Ediləcəklər"
+            placeholder={isMeeting ? 'Məsələn: Sprint planlaması' : 'Məsələn: Ediləcəklər'}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>

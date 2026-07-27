@@ -9,6 +9,7 @@ import Tasks from "../pages/Tasks";
 import InfluenserAzPage from "../pages/InfluenserAzPage";
 import TaskLists from "../pages/TaskLists";
 import TaskDetail from "../pages/TaskDetail";
+import MeetingNote from "../pages/MeetingNote";
 import TaskStatuses from "../pages/TaskStatuses";
 import ActivityLogs from "../pages/ActivityLogs";
 import Trash from "../pages/Trash";
@@ -38,6 +39,8 @@ export const router = createBrowserRouter(
                 <Route path="/tasks/space/:spaceId/folder/:folderId" element={<TaskLists />} />
                 <Route path="/tasks/space/:spaceId/list/:taskListId" element={<TaskDetail />} />
                 <Route path="/tasks/space/:spaceId/folder/:folderId/list/:taskListId" element={<TaskDetail />} />
+                <Route path="/tasks/space/:spaceId/note/:taskListId" element={<MeetingNote />} />
+                <Route path="/tasks/space/:spaceId/folder/:folderId/note/:taskListId" element={<MeetingNote />} />
                 {/* Legacy folder routes - for backwards compatibility */}
                 <Route path="/tasks/folder/:folderId" element={<TaskLists />} />
                 <Route path="/tasks/folder/:folderId/list/:taskListId" element={<TaskDetail />} />
