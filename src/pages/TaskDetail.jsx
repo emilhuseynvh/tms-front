@@ -890,6 +890,84 @@ const TaskDetail = () => {
     return tasks.filter(task => !task.parentId || task.parentId === null)
   }, [tasks])
 
+  // Sütun sortu: { field, dir } — bir klik artan, ikinci klik azalan, X ilə silinir
+  const [sortConfig, setSortConfig] = useState(null)
+
+  const toggleSort = (field) => {
+    setSortConfig(prev =>
+      prev?.field === field
+        ? { field, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { field, dir: 'asc' }
+    )
+  }
+
+  const sortedRootTasks = useMemo(() => {
+    if (!sortConfig) return rootTasks
+    const getVal = (task) => {
+      switch (sortConfig.field) {
+        case 'status': {
+          const status = statuses.find(s => s.id === task.statusId)
+          return status?.name?.toLowerCase() || null
+        }
+        case 'updatedAt':
+          return task.updatedAt ? new Date(task.updatedAt).getTime() : null
+        case 'startAt':
+          return task.startAt ? new Date(task.startAt).getTime() : null
+        case 'dueAt':
+          return task.dueAt ? new Date(task.dueAt).getTime() : null
+        default:
+          return null
+      }
+    }
+    const dir = sortConfig.dir === 'asc' ? 1 : -1
+    return [...rootTasks].sort((a, b) => {
+      const av = getVal(a)
+      const bv = getVal(b)
+      // Boş dəyərlər həmişə sonda
+      if (av === null && bv === null) return 0
+      if (av === null) return 1
+      if (bv === null) return -1
+      if (av < bv) return -1 * dir
+      if (av > bv) return 1 * dir
+      return 0
+    })
+  }, [rootTasks, sortConfig, statuses])
+
+  // Sortlana bilən sütun başlığı
+  const renderSortableHeader = (label, field) => (
+    <div className="flex items-center gap-1 min-w-0">
+      <button
+        type="button"
+        onClick={() => toggleSort(field)}
+        className="flex items-center gap-1 min-w-0 hover:text-blue-600 transition-colors"
+        title="Sırala"
+      >
+        <span className="truncate">{label}</span>
+        {sortConfig?.field === field && (
+          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            {sortConfig.dir === 'asc' ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            )}
+          </svg>
+        )}
+      </button>
+      {sortConfig?.field === field && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setSortConfig(null) }}
+          className="p-0.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors shrink-0"
+          title="Sortu sil"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+
   // Toggle task expansion
   const toggleTask = (taskId) => {
     setExpandedTasks(prev => {
@@ -1671,7 +1749,7 @@ const TaskDetail = () => {
                     </div>
                   </th>
                   <th style={getColumnStyle('status')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    <div className="truncate">Status</div>
+                    {renderSortableHeader('Status', 'status')}
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'status')}
@@ -1689,7 +1767,7 @@ const TaskDetail = () => {
                     </div>
                   </th>
                   <th style={getColumnStyle('updatedAt')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    <div className="truncate">Son yenilənmə</div>
+                    {renderSortableHeader('Son yenilənmə', 'updatedAt')}
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'updatedAt')}
@@ -1698,7 +1776,7 @@ const TaskDetail = () => {
                     </div>
                   </th>
                   <th style={getColumnStyle('startDate')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    <div className="truncate">Başlama</div>
+                    {renderSortableHeader('Başlama', 'startAt')}
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'startDate')}
@@ -1707,7 +1785,7 @@ const TaskDetail = () => {
                     </div>
                   </th>
                   <th style={getColumnStyle('endDate')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
-                    <div className="truncate">Bitmə</div>
+                    {renderSortableHeader('Bitmə', 'dueAt')}
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
                       onMouseDown={(e) => handleResizeStart(e, 'endDate')}
@@ -1727,7 +1805,7 @@ const TaskDetail = () => {
                 </tr>
               </thead>
               <tbody>
-                {rootTasks.map((task, index) => renderTaskRow(task, 0, index))}
+                {sortedRootTasks.map((task, index) => renderTaskRow(task, 0, index))}
               </tbody>
             </table>
 
@@ -1832,7 +1910,7 @@ const TaskDetail = () => {
             )}
 
             <div className="space-y-3">
-              {rootTasks.map((task, index) => renderTaskCard(task, 0, index))}
+              {sortedRootTasks.map((task, index) => renderTaskCard(task, 0, index))}
             </div>
 
             {/* Add Task Button for Mobile */}
