@@ -63,6 +63,7 @@ const TaskActivityTooltip = ({ taskId, children }) => {
   const [isHovering, setIsHovering] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterUserId, setFilterUserId] = useState('')
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0, showAbove: false })
   const containerRef = useRef(null)
   const hideTimeoutRef = useRef(null)
@@ -75,6 +76,7 @@ const TaskActivityTooltip = ({ taskId, children }) => {
   const closeExpanded = () => {
     setIsExpanded(false)
     setSearchTerm('')
+    setFilterUserId('')
   }
 
   const handleMouseEnter = () => {
@@ -313,7 +315,11 @@ const TaskActivityTooltip = ({ taskId, children }) => {
     return parts.join(' ').toLowerCase().includes(q)
   }
 
-  const filteredActivities = activities.filter(activityMatchesSearch)
+  // Şəxs filtri: "hansı adam nəyi edib"
+  const filteredActivities = activities.filter((activity) => {
+    if (filterUserId && String(activity.userId) !== String(filterUserId)) return false
+    return activityMatchesSearch(activity)
+  })
 
   // Esc ilə genişlənmiş modalı bağla
   useEffect(() => {
@@ -347,10 +353,10 @@ const TaskActivityTooltip = ({ taskId, children }) => {
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-600">
-              {searchTerm.trim() ? 'Axtarışa uyğun əməliyyat tapılmadı' : 'Tarixçə yoxdur'}
+              {searchTerm.trim() || filterUserId ? 'Axtarışa uyğun əməliyyat tapılmadı' : 'Tarixçə yoxdur'}
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              {searchTerm.trim() ? 'Başqa açar söz yoxlayın' : 'Hələ heç bir dəyişiklik edilməyib'}
+              {searchTerm.trim() || filterUserId ? 'Filtrləri dəyişib yenidən yoxlayın' : 'Hələ heç bir dəyişiklik edilməyib'}
             </p>
           </div>
         ) : (
@@ -555,9 +561,22 @@ const TaskActivityTooltip = ({ taskId, children }) => {
           </div>
         </div>
 
-        {/* Search — yalnız genişlənmiş rejimdə */}
-        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
-          <div className="relative">
+        {/* Search + şəxs filtri — yalnız genişlənmiş rejimdə */}
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row gap-2">
+          <select
+            value={filterUserId}
+            onChange={(e) => setFilterUserId(e.target.value)}
+            className="sm:w-44 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+            title="Şəxsə görə filtrle"
+          >
+            <option value="">Bütün şəxslər</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name || user.username || user.email}
+              </option>
+            ))}
+          </select>
+          <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -570,6 +589,16 @@ const TaskActivityTooltip = ({ taskId, children }) => {
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
             />
           </div>
+          {(filterUserId || searchTerm.trim()) && (
+            <button
+              type="button"
+              onClick={() => { setFilterUserId(''); setSearchTerm('') }}
+              className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-300 rounded-lg transition-colors shrink-0"
+              title="Filtrləri təmizlə"
+            >
+              Təmizlə
+            </button>
+          )}
         </div>
 
         {panelBody}
