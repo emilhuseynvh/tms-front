@@ -93,6 +93,34 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { confirm } = useConfirm()
   const [isTasksOpen, setIsTasksOpen] = useState(false)
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(true)
+
+  // Sidebar-ın dartılıb dəyişdirilə bilən eni (localStorage-da yadda saxlanılır)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = parseInt(localStorage.getItem('sidebarWidth'), 10)
+    return Number.isFinite(saved) ? Math.min(480, Math.max(220, saved)) : 288
+  })
+
+  const startSidebarResize = (e) => {
+    e.preventDefault()
+    const onMove = (ev) => {
+      // Sidebar soldan başladığı üçün kursorun X koordinatı = en
+      setSidebarWidth(Math.min(480, Math.max(220, ev.clientX)))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setSidebarWidth((w) => {
+        localStorage.setItem('sidebarWidth', String(w))
+        return w
+      })
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
   const [searchQuery, setSearchQuery] = useState('')
   const [isSpaceModalOpen, setIsSpaceModalOpen] = useState(false)
   const [editingSpace, setEditingSpace] = useState(null)
@@ -658,10 +686,17 @@ const Sidebar = ({ isOpen, onClose }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed md:static inset-y-0 left-0 z-50 w-72 bg-blue-50 border-r border-blue-100 h-screen flex flex-col transform transition-transform duration-300 ease-in-out ${
+        className={`fixed md:relative inset-y-0 left-0 z-50 bg-blue-50 border-r border-blue-100 h-screen flex flex-col transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
+        style={{ width: sidebarWidth }}
       >
+        {/* Eni dəyişmək üçün dartma zolağı (yalnız desktop) */}
+        <div
+          onMouseDown={startSidebarResize}
+          className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-blue-300/70 active:bg-blue-400/70 z-50"
+          title="Sidebar-ın enini dəyişmək üçün dartın"
+        />
         {/* Logo/Header */}
         <div className="h-16 flex items-center px-6 border-b border-blue-100">
           <h2 className="text-lg font-semibold text-blue-900">Task Manager</h2>
