@@ -67,6 +67,8 @@ const FloatingChat = () => {
   const [view, setView] = useState('chats')
   const [showGroupModal, setShowGroupModal] = useState(false)
   const [showGroupSettings, setShowGroupSettings] = useState(false)
+  const [roomSearchOpen, setRoomSearchOpen] = useState(false)
+  const [roomSearchQuery, setRoomSearchQuery] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const messagesContainerRef = useRef(null)
@@ -84,11 +86,24 @@ const FloatingChat = () => {
       setSelectedRoom(fresh)
     }
   }, [rooms]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Otaq dəyişəndə söhbət daxili axtarışı sıfırla
+  useEffect(() => {
+    setRoomSearchOpen(false)
+    setRoomSearchQuery('')
+  }, [selectedRoom?.id])
   const { data: users = [], isLoading: usersLoading } = useGetUsersQuery()
   const { data: messages = [], isLoading: messagesLoading } = useGetMessagesQuery(
     selectedRoom?.id,
     { skip: !selectedRoom }
   )
+
+  // Söhbət daxili mesaj axtarışı
+  const filteredMessages = roomSearchQuery.trim()
+    ? messages.filter((m) =>
+        m.content?.toLowerCase().includes(roomSearchQuery.trim().toLowerCase())
+      )
+    : messages
   const { data: searchResults, isLoading: searchLoading } = useSearchChatQuery(
     searchQuery,
     { skip: !searchQuery || searchQuery.length < 2 || view === 'users' }
@@ -387,6 +402,21 @@ const FloatingChat = () => {
                     <p className="text-xs text-blue-100">{selectedRoom.members?.length || 0} üzv</p>
                   )}
                 </div>
+                {/* In-room search toggle */}
+                <button
+                  onClick={() => {
+                    setRoomSearchOpen((prev) => {
+                      if (prev) setRoomSearchQuery('')
+                      return !prev
+                    })
+                  }}
+                  className={`p-1.5 rounded-full transition-colors ${roomSearchOpen ? 'bg-white/30' : 'hover:bg-white/20'}`}
+                  title="Mesajlarda axtar"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
                 {/* Close button for mobile */}
                 <button
                   onClick={() => setIsOpen(false)}
@@ -398,14 +428,39 @@ const FloatingChat = () => {
                 </button>
               </div>
 
+              {/* In-room search input */}
+              {roomSearchOpen && (
+                <div className="px-3 py-2 bg-white border-b border-gray-200 shrink-0">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Bu söhbətdə axtar..."
+                    value={roomSearchQuery}
+                    onChange={(e) => setRoomSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setRoomSearchOpen(false)
+                        setRoomSearchQuery('')
+                      }
+                    }}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {roomSearchQuery.trim() && (
+                    <p className="mt-1 text-[11px] text-gray-500">{filteredMessages.length} mesaj tapıldı</p>
+                  )}
+                </div>
+              )}
+
               {/* Messages */}
               <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 bg-gray-50 space-y-2">
                 {messagesLoading ? (
                   <div className="text-center text-gray-500 py-4 text-sm">Yüklənir...</div>
                 ) : messages.length === 0 ? (
                   <div className="text-center text-gray-500 py-4 text-sm">Heç bir mesaj yoxdur</div>
+                ) : filteredMessages.length === 0 ? (
+                  <div className="text-center text-gray-500 py-4 text-sm">Axtarışa uyğun mesaj tapılmadı</div>
                 ) : (
-                  messages.map((message) => {
+                  filteredMessages.map((message) => {
                     const isOwnMessage = message.senderId === currentUser?.id
                     if (message.isSystem) {
                       return (
