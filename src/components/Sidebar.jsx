@@ -92,6 +92,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const dispatch = useDispatch()
   const { confirm } = useConfirm()
   const [isTasksOpen, setIsTasksOpen] = useState(false)
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [isSpaceModalOpen, setIsSpaceModalOpen] = useState(false)
   const [editingSpace, setEditingSpace] = useState(null)
@@ -732,21 +733,6 @@ const Sidebar = ({ isOpen, onClose }) => {
             {/* Spaces List */}
             {isTasksOpen && (
               <div className="mt-2 ml-3 space-y-2">
-                <div className="px-2">
-                  <NavLink
-                    to="/tasks/influenser-az"
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      `flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
-                        isActive
-                          ? 'bg-indigo-800 text-white ring-2 ring-indigo-400/60 ring-offset-2 ring-offset-white'
-                          : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 hover:shadow-md'
-                      }`
-                    }
-                  >
-                    {workspaceName}
-                  </NavLink>
-                </div>
                 {/* Search Input with Add Button */}
                 <div className="px-2 flex gap-1">
                   <input
@@ -767,6 +753,43 @@ const Sidebar = ({ isOpen, onClose }) => {
                   </button>
                 </div>
 
+                {/* Workspace — bütün sahələr bunun içindədir */}
+                <div className="px-2">
+                  <div
+                    className={`flex items-center w-full rounded-lg text-xs font-semibold shadow-sm transition-all overflow-hidden ${
+                      location.pathname === '/tasks/influenser-az'
+                        ? 'bg-indigo-800 text-white ring-2 ring-indigo-400/60 ring-offset-2 ring-offset-white'
+                        : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700 hover:shadow-md'
+                    }`}
+                  >
+                    <NavLink
+                      to="/tasks/influenser-az"
+                      onClick={onClose}
+                      className="flex-1 min-w-0 px-3 py-2.5 truncate text-left"
+                    >
+                      {workspaceName}
+                    </NavLink>
+                    <button
+                      type="button"
+                      onClick={() => setIsWorkspaceOpen(!isWorkspaceOpen)}
+                      className="px-2.5 py-2.5 hover:bg-white/15 transition-colors shrink-0"
+                      title={isWorkspaceOpen ? 'Yığ' : 'Aç'}
+                    >
+                      <svg
+                        className={`w-4 h-4 transition-transform ${isWorkspaceOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Workspace-in içi: sahələr */}
+                {isWorkspaceOpen && (
+                <div className="ml-3 pl-2 border-l-2 border-indigo-100 space-y-2">
                 {isReordering && (
                   <div
                     className="mx-2 mb-2 flex items-center gap-2 rounded-md border border-blue-200 bg-white/90 px-2.5 py-2 text-xs font-medium text-blue-800 shadow-sm"
@@ -838,6 +861,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                     ))
                   )}
                 </ul>
+                </div>
+                )}
               </div>
             )}
           </li>

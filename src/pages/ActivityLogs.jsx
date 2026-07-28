@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import {
   useGetActivityLogsQuery,
   useGetUsersQuery,
@@ -63,6 +64,7 @@ const formatFullDate = (dateString) => {
 }
 
 const ActivityLogs = () => {
+  const navigate = useNavigate()
   const [filters, setFilters] = useState({
     page: 1,
     limit: 20,
@@ -479,6 +481,33 @@ const ActivityLogs = () => {
                     <p className="text-xs text-gray-500 mt-1">
                       Element: <span className="font-medium">{log.entityName}</span>
                     </p>
+                  )}
+                  {/* Yerləşmə: Space / Folder / List + keçid linki */}
+                  {(log.context?.spaceName || log.context?.folderName || log.context?.listName) && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1 text-xs text-gray-500">
+                      <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className="truncate">
+                        {[log.context.spaceName, log.context.folderName, log.context.listName]
+                          .filter(Boolean)
+                          .join(' / ')}
+                      </span>
+                      {log.context.url && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(log.context.url)}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-medium transition-colors shrink-0"
+                          title="Bu yerə keç"
+                        >
+                          Keç
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   )}
                   {log.changes && Object.keys(log.changes).length > 0 && (
                     <div className="mt-2 p-2 bg-gray-50 rounded text-xs">

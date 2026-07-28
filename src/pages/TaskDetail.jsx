@@ -127,7 +127,7 @@ const TaskDetail = () => {
 
   // Column resize state
   const [columnWidths, setColumnWidths] = useState({
-    checkbox: 48,
+    checkbox: 28,
     title: 400,
     description: 200,
     status: 130,
@@ -1058,7 +1058,7 @@ const TaskDetail = () => {
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           } ${dropIndicatorClass}`}
         >
-          <td style={getColumnStyle('checkbox')} className="px-2 py-2">
+          <td style={getColumnStyle('checkbox')} className="pl-2 pr-0 py-2">
             <input
               type="checkbox"
               checked={selectedTasks.has(task.id)}
@@ -1070,12 +1070,12 @@ const TaskDetail = () => {
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
             />
           </td>
-          <td style={getColumnStyle('title')} className="px-2 py-2">
+          <td style={getColumnStyle('title')} className="pl-1 pr-2 py-2">
             <div
-              className="min-w-0 -ml-1"
+              className="min-w-0 -ml-2"
               style={{ paddingLeft: `${indent}px` }}
             >
-              <div data-task-title-row className="flex items-center gap-1.5 min-w-0">
+              <div data-task-title-row className="flex items-center gap-1 min-w-0">
                 {hasChildren ? (
                   <button
                     type="button"
@@ -1096,7 +1096,7 @@ const TaskDetail = () => {
                     </svg>
                   </button>
                 ) : (
-                  <span className="inline-flex w-[22px] flex-shrink-0" aria-hidden="true" />
+                  <span className="inline-flex w-[18px] flex-shrink-0" aria-hidden="true" />
                 )}
                 <div className="flex-1 min-w-0">
                   {isEditingTitle ? (
@@ -1342,7 +1342,7 @@ const TaskDetail = () => {
                     </svg>
                   </button>
                 ) : (
-                  <span className="inline-flex w-[22px] flex-shrink-0" aria-hidden="true" />
+                  <span className="inline-flex w-[18px] flex-shrink-0" aria-hidden="true" />
                 )}
                 <h3
                   className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 min-w-0"
@@ -1711,7 +1711,7 @@ const TaskDetail = () => {
             <table ref={tableRef} className="table-auto" style={{ width: `${totalTableWidth}px`, tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th style={getColumnStyle('checkbox')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                  <th style={getColumnStyle('checkbox')} className="pl-2 pr-0 py-2 text-left text-xs font-medium text-gray-500 relative">
                     <div className="flex items-center">
                       <input
                         type="checkbox"
@@ -1730,7 +1730,7 @@ const TaskDetail = () => {
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-gray-300 group-hover:bg-blue-500" />
                     </div>
                   </th>
-                  <th style={getColumnStyle('title')} className="px-2 py-2 text-left text-xs font-medium text-gray-500 relative">
+                  <th style={getColumnStyle('title')} className="pl-1 pr-2 py-2 text-left text-xs font-medium text-gray-500 relative">
                     <div className="truncate">Başlıq</div>
                     <div
                       className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 group"
