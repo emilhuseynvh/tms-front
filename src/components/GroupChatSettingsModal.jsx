@@ -7,6 +7,7 @@ import {
 } from '../services/chatApi'
 import { toast } from 'react-toastify'
 import { useConfirm } from '../context/ConfirmContext'
+import ImageCropModal from './ImageCropModal'
 
 const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
   const { confirm } = useConfirm()
@@ -18,6 +19,7 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
 
   const [groupName, setGroupName] = useState(room.name || '')
   const [addUserId, setAddUserId] = useState('')
+  const [cropSrc, setCropSrc] = useState(null)
   const fileInputRef = useRef(null)
 
   const isCurrentUserAdmin = !!room.members?.find(
@@ -42,7 +44,8 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
     }
   }
 
-  const handleAvatarUpload = async (e) => {
+  // Şəkil seçiləndə əvvəlcə crop/resize addımı açılır
+  const handleAvatarSelect = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -53,6 +56,13 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
       return
     }
 
+    const reader = new FileReader()
+    reader.onloadend = () => setCropSrc(reader.result)
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleCropConfirm = async (file) => {
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -60,10 +70,9 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
       const updated = await updateGroupChat({ roomId: room.id, avatarId: result.id }).unwrap()
       refreshRoom(updated)
       toast.success('Qrup şəkli yeniləndi!')
+      setCropSrc(null)
     } catch (error) {
       toast.error(error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!')
-    } finally {
-      e.target.value = ''
     }
   }
 
@@ -138,7 +147,7 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
-            onChange={handleAvatarUpload}
+            onChange={handleAvatarSelect}
             className="hidden"
           />
           {isUploading && <p className="mt-2 text-xs text-gray-500">Yüklənir...</p>}
@@ -236,6 +245,16 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
           </div>
         </div>
       </div>
+
+      {/* Crop/resize addımı */}
+      {cropSrc && (
+        <ImageCropModal
+          imageSrc={cropSrc}
+          title="Qrup şəklini tənzimlə"
+          onCancel={() => setCropSrc(null)}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   )
 }

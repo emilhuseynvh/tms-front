@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useUpdateProfileMutation, useUploadImageMutation } from '../services/adminApi'
 import { useVerifyQuery } from '../services/authApi'
 import { toast } from 'react-toastify'
+import ImageCropModal from '../components/ImageCropModal'
 
 const Profile = () => {
   const { data: currentUser, refetch } = useVerifyQuery()
@@ -18,6 +19,7 @@ const Profile = () => {
   })
 
   const [avatarPreview, setAvatarPreview] = useState(null)
+  const [cropSrc, setCropSrc] = useState(null)
 
   useEffect(() => {
     if (currentUser) {
@@ -45,7 +47,8 @@ const Profile = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleImageUpload = async (e) => {
+  // Şəkil seçiləndə əvvəlcə crop/resize addımı açılır
+  const handleImageUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -65,36 +68,27 @@ const Profile = () => {
       return
     }
 
-    // Preview
     const reader = new FileReader()
-    reader.onloadend = () => {
-      setAvatarPreview(reader.result)
-    }
+    reader.onloadend = () => setCropSrc(reader.result)
     reader.readAsDataURL(file)
+    e.target.value = ''
+  }
 
-    // Upload
+  // Crop təsdiqlənəndən sonra yüklə və profildə dərhal saxla
+  const handleCropConfirm = async (file) => {
     const formDataImage = new FormData()
     formDataImage.append('file', file)
 
     try {
       const result = await uploadImage(formDataImage).unwrap()
       setFormData({ ...formData, avatarId: result.id })
-      // Şəkil yüklənən kimi profildə dərhal yadda saxla ("Yadda saxla" gözləmədən)
       await updateProfile({ avatarId: result.id }).unwrap()
+      setAvatarPreview(URL.createObjectURL(file))
       refetch()
       toast.success('Profil şəkli yeniləndi!')
+      setCropSrc(null)
     } catch (error) {
-      const errorMessage = error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!'
-      // Backend error mesajlarını Azərbaycan dilinə çevir
-      if (errorMessage.includes('type is not correct') || errorMessage.includes('mime')) {
-        toast.error('Yalnız JPG, PNG və WebP formatları dəstəklənir!')
-      } else if (errorMessage.includes('size') || errorMessage.includes('large')) {
-        toast.error('Şəkil ölçüsü 25MB-dan böyük ola bilməz!')
-      } else {
-        toast.error(errorMessage)
-      }
-      setAvatarPreview(currentUser?.avatar || null)
-      e.target.value = ''
+      toast.error(error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!')
     }
   }
 
@@ -238,6 +232,16 @@ const Profile = () => {
           </div>
         </form>
       </div>
+
+      {/* Crop/resize addımı */}
+      {cropSrc && (
+        <ImageCropModal
+          imageSrc={cropSrc}
+          title="Profil şəklini tənzimlə"
+          onCancel={() => setCropSrc(null)}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   )
 }
