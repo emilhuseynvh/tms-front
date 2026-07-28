@@ -107,6 +107,20 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
         toast.error(error.message || 'Mesaj göndərilə bilmədi')
       })
 
+      // Mesaj redaktə olunanda cache-i yenilə
+      globalSocket.on('message:updated', (message) => {
+        try {
+          dispatch(
+            chatApi.util.updateQueryData('getMessages', message.roomId, (draft) => {
+              const index = draft.findIndex((m) => m.id === message.id)
+              if (index !== -1) draft.splice(index, 1, { ...draft[index], ...message })
+            })
+          )
+        } catch (e) {
+          console.error('Failed to apply message:updated', e)
+        }
+      })
+
       // Listen for new messages - backend emits message:new
       globalSocket.on('message:new', (message) => {
         console.log('New message received via WebSocket:', message)

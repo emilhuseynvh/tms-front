@@ -5,6 +5,7 @@ import {
   useGetMessagesQuery,
   useMarkAsReadMutation,
   useCreateDirectChatMutation,
+  useEditMessageMutation,
   chatApi,
 } from '../services/chatApi'
 import { useVerifyQuery } from '../services/authApi'
@@ -64,6 +65,7 @@ const Chat = () => {
   const dispatch = useDispatch()
   const [markAsRead] = useMarkAsReadMutation()
   const [createDirectChat, { isLoading: isCreating }] = useCreateDirectChatMutation()
+  const [editMessage] = useEditMessageMutation()
 
   // Update active room in WebSocket hook
   useWebSocket(selectedRoom?.id, rooms, currentUser?.id)
@@ -542,7 +544,19 @@ const Chat = () => {
                               {message.sender?.username || 'İstifadəçi'}
                             </p>
                           )}
-                          <MessageContent content={message.content} isOwnMessage={isOwnMessage} />
+                          <MessageContent
+                            message={message}
+                            isOwnMessage={isOwnMessage}
+                            canEdit={isOwnMessage && !message._isOptimistic}
+                            onEdit={async (content) => {
+                              try {
+                                await editMessage({ messageId: message.id, roomId: selectedRoom.id, content }).unwrap()
+                              } catch (error) {
+                                toast.error(error?.data?.message || 'Mesaj redaktə edilə bilmədi')
+                                throw error
+                              }
+                            }}
+                          />
                           <div className="flex items-center justify-end gap-1 mt-1">
                             <p
                               className={`text-xs ${

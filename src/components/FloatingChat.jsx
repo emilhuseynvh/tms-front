@@ -5,6 +5,7 @@ import {
   useGetMessagesQuery,
   useMarkAsReadMutation,
   useCreateDirectChatMutation,
+  useEditMessageMutation,
   useSearchChatQuery,
   chatApi,
 } from '../services/chatApi'
@@ -95,6 +96,7 @@ const FloatingChat = () => {
   const dispatch = useDispatch()
   const [markAsRead] = useMarkAsReadMutation()
   const [createDirectChat] = useCreateDirectChatMutation()
+  const [editMessage] = useEditMessageMutation()
 
   const sendWebSocketMessage = useWebSocketSend()
 
@@ -419,7 +421,19 @@ const FloatingChat = () => {
                               {message.sender?.username || 'İstifadəçi'}
                             </p>
                           )}
-                          <MessageContent content={message.content} isOwnMessage={isOwnMessage} />
+                          <MessageContent
+                            message={message}
+                            isOwnMessage={isOwnMessage}
+                            canEdit={isOwnMessage && !message._isOptimistic}
+                            onEdit={async (content) => {
+                              try {
+                                await editMessage({ messageId: message.id, roomId: selectedRoom.id, content }).unwrap()
+                              } catch (error) {
+                                toast.error(error?.data?.message || 'Mesaj redaktə edilə bilmədi')
+                                throw error
+                              }
+                            }}
+                          />
                           <p className={`text-[10px] mt-1 text-right ${isOwnMessage ? 'text-blue-200' : 'text-gray-400'}`}>
                             {formatTime(message.createdAt)}
                           </p>

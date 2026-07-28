@@ -134,6 +134,28 @@ export const chatApi = createApi({
       },
     }),
 
+    // Edit message (only sender)
+    editMessage: builder.mutation({
+      query: ({ messageId, content }) => ({
+        url: `/api/chat/messages/${messageId}/edit`,
+        method: 'POST',
+        body: { content },
+      }),
+      async onQueryStarted({ messageId, roomId }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled
+          dispatch(
+            chatApi.util.updateQueryData('getMessages', roomId, (draft) => {
+              const index = draft.findIndex((m) => m.id === messageId)
+              if (index !== -1) draft.splice(index, 1, { ...draft[index], ...data })
+            })
+          )
+        } catch {
+          // xəta toast-u çağıran tərəfdə göstərilir
+        }
+      },
+    }),
+
     // Mark messages as read
     markAsRead: builder.mutation({
       query: (roomId) => ({
@@ -161,6 +183,7 @@ export const {
   useUpdateGroupChatMutation,
   useGetMessagesQuery,
   useSendMessageMutation,
+  useEditMessageMutation,
   useMarkAsReadMutation,
   useSearchChatQuery,
 } = chatApi

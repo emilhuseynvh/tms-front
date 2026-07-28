@@ -69,7 +69,7 @@ const StatusDropdown = ({ value, statuses, currentStatus, onChange }) => {
             style={{ backgroundColor: currentStatus.color }}
           />
         )}
-        <span className="truncate">{currentStatus?.name || 'Status'}</span>
+        <span className="whitespace-normal wrap-break-word min-w-0">{currentStatus?.name || 'Status'}</span>
       </button>
       {isOpen && createPortal(
         <div
@@ -1116,7 +1116,7 @@ const TaskDetail = () => {
                     >
                       <span
                         data-task-title
-                        className="text-sm font-medium text-gray-900 hover:text-blue-600 break-words line-clamp-3"
+                        className="text-sm font-medium text-gray-900 hover:text-blue-600 break-words"
                       >
                         {task.title}
                       </span>
@@ -1149,13 +1149,13 @@ const TaskDetail = () => {
                 className="cursor-text hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5 min-h-[24px]"
                 title={task.description || 'Açıqlama əlavə et'}
               >
-                <div className="text-xs text-gray-600 break-words line-clamp-3">
+                <div className="text-xs text-gray-600 break-words">
                   {task.description || <span className="text-gray-400 italic">Açıqlama yoxdur</span>}
                 </div>
               </div>
             )}
           </td>
-          <td style={getColumnStyle('status')} className="px-2 py-2 whitespace-nowrap">
+          <td style={getColumnStyle('status')} className="px-2 py-2">
             <StatusDropdown
               value={task.statusId}
               statuses={statuses}
@@ -1181,7 +1181,7 @@ const TaskDetail = () => {
                   </svg>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-medium text-gray-700 group-hover:text-indigo-700 transition-colors truncate">
+                  <span className="text-xs font-medium text-gray-700 group-hover:text-indigo-700 transition-colors whitespace-normal wrap-break-word">
                     {formatInlineTableDate(task.updatedAt)}
                   </span>
                 </div>
