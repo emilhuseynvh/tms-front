@@ -388,7 +388,7 @@ const TaskLists = () => {
                     </svg>
                   </>
                 )}
-                <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
+                <h1 className={`${folderId ? 'text-base md:text-lg' : 'text-xl md:text-2xl'} font-semibold text-gray-900 truncate`}>{pageTitle}</h1>
                 <div className="flex gap-1">
                   <button
                     onClick={handleOpenPageTitleEdit}
@@ -557,7 +557,7 @@ const TaskLists = () => {
                   </svg>
                 </>
               )}
-              <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
+              <h1 className={`${folderId ? 'text-base md:text-lg' : 'text-xl md:text-2xl'} font-semibold text-gray-900 truncate`}>{pageTitle}</h1>
               <div className="flex gap-1">
                 <button
                   onClick={handleOpenPageTitleEdit}
