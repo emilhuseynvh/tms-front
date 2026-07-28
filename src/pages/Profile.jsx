@@ -30,7 +30,9 @@ const Profile = () => {
         email: currentUser.email || '',
         password: '',
         role: userRole,
-        avatarId: currentUser.avatarId || 0,
+        // verify köhnə backend-də avatarId qaytarmaya bilər — nested avatar.id-yə fallback et,
+        // əks halda 0 göndərilib mövcud avatar silinir
+        avatarId: currentUser.avatarId ?? currentUser.avatar?.id ?? 0,
       })
 
       if (currentUser.avatar) {
@@ -77,7 +79,10 @@ const Profile = () => {
     try {
       const result = await uploadImage(formDataImage).unwrap()
       setFormData({ ...formData, avatarId: result.id })
-      toast.success('Şəkil yükləndi!')
+      // Şəkil yüklənən kimi profildə dərhal yadda saxla ("Yadda saxla" gözləmədən)
+      await updateProfile({ avatarId: result.id }).unwrap()
+      refetch()
+      toast.success('Profil şəkli yeniləndi!')
     } catch (error) {
       const errorMessage = error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!'
       // Backend error mesajlarını Azərbaycan dilinə çevir

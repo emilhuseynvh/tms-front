@@ -11,6 +11,7 @@ import {
 import { useVerifyQuery } from '../services/authApi'
 import { useGetUsersQuery } from '../services/adminApi'
 import CreateGroupChatModal from './CreateGroupChatModal'
+import MessageContent from './MessageContent'
 import { toast } from 'react-toastify'
 import { useWebSocketSend, setCurrentActiveRoomId } from '../hooks/useWebSocket'
 
@@ -364,7 +365,7 @@ const FloatingChat = () => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-sm truncate">{getRoomName(selectedRoom)}</h3>
                   {selectedRoom.type === 'group' && (
-                    <p className="text-xs text-blue-100">{selectedRoom.memberCount || 0} üzv</p>
+                    <p className="text-xs text-blue-100">{selectedRoom.members?.length || 0} üzv</p>
                   )}
                 </div>
                 {/* Close button for mobile */}
@@ -401,7 +402,7 @@ const FloatingChat = () => {
                               {message.sender?.username || 'İstifadəçi'}
                             </p>
                           )}
-                          <p className="break-words">{message.content}</p>
+                          <MessageContent content={message.content} isOwnMessage={isOwnMessage} />
                           <p className={`text-[10px] mt-1 text-right ${isOwnMessage ? 'text-blue-200' : 'text-gray-400'}`}>
                             {formatTime(message.createdAt)}
                           </p>

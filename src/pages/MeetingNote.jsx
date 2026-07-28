@@ -6,6 +6,35 @@ import {
   useUpdateTaskListMutation,
 } from '../services/adminApi'
 
+// Köhnə plain-text qeydləri HTML-ə çevir
+const toEditorHtml = (raw) => {
+  if (!raw) return ''
+  if (raw.includes('<')) return raw
+  const escaped = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return escaped
+    .split('\n')
+    .map((line) => `<div>${line || '<br>'}</div>`)
+    .join('')
+}
+
+const ToolbarButton = ({ onAction, title, children, className = '' }) => (
+  <button
+    type="button"
+    title={title}
+    // onMouseDown + preventDefault — editor fokusunu və seçimi itirməmək üçün
+    onMouseDown={(e) => {
+      e.preventDefault()
+      onAction()
+    }}
+    className={`px-2 py-1 min-w-[30px] text-sm text-gray-600 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors ${className}`}
+  >
+    {children}
+  </button>
+)
+
 const MeetingNote = () => {
   const { spaceId, folderId, taskListId } = useParams()
   const navigate = useNavigate()
@@ -13,26 +42,25 @@ const MeetingNote = () => {
   const { data: taskListData, isLoading } = useGetTaskListQuery(taskListId)
   const [updateTaskList] = useUpdateTaskListMutation()
 
-  const [content, setContent] = useState('')
   const [saveStatus, setSaveStatus] = useState('saved') // saved | dirty | saving
+  const editorRef = useRef(null)
   const loadedListIdRef = useRef(null)
   const saveTimeoutRef = useRef(null)
-  const contentRef = useRef('')
-  contentRef.current = content
 
-  // Server məlumatını yalnız ilk yüklənəndə lokal state-ə köçür (yazarkən üstələməsin)
+  // Server məlumatını yalnız ilk yüklənəndə editora köçür (yazarkən üstələməsin)
   useEffect(() => {
-    if (taskListData && loadedListIdRef.current !== taskListData.id) {
+    if (taskListData && loadedListIdRef.current !== taskListData.id && editorRef.current) {
       loadedListIdRef.current = taskListData.id
-      setContent(taskListData.content || '')
+      editorRef.current.innerHTML = toEditorHtml(taskListData.content || '')
       setSaveStatus('saved')
     }
   }, [taskListData])
 
-  const saveContent = async (value) => {
+  const saveContent = async () => {
+    if (!editorRef.current) return
     setSaveStatus('saving')
     try {
-      await updateTaskList({ id: parseInt(taskListId), content: value }).unwrap()
+      await updateTaskList({ id: parseInt(taskListId), content: editorRef.current.innerHTML }).unwrap()
       setSaveStatus('saved')
     } catch (error) {
       setSaveStatus('dirty')
@@ -40,16 +68,58 @@ const MeetingNote = () => {
     }
   }
 
-  const handleContentChange = (e) => {
-    setContent(e.target.value)
+  const markDirty = () => {
     setSaveStatus('dirty')
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    saveTimeoutRef.current = setTimeout(() => saveContent(contentRef.current), 1500)
+    saveTimeoutRef.current = setTimeout(saveContent, 1500)
   }
 
   const handleManualSave = () => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    saveContent(contentRef.current)
+    saveContent()
+  }
+
+  // Toolbar əmrləri
+  const exec = (command, value = null) => {
+    editorRef.current?.focus()
+    document.execCommand(command, false, value)
+    markDirty()
+  }
+
+  const applyHeading = (tag) => {
+    const current = (document.queryCommandValue('formatBlock') || '').toLowerCase()
+    exec('formatBlock', current === tag ? 'div' : tag)
+  }
+
+  const insertChecklist = () => {
+    exec('insertHTML', '<ul class="checklist"><li><input type="checkbox">&nbsp;</li></ul><div><br></div>')
+  }
+
+  // Başlıq sətrində Enter basanda növbəti sətir normal mətn olsun (başlıq davam etməsin)
+  const handleEditorKeyDown = (e) => {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    const sel = window.getSelection()
+    if (!sel?.anchorNode) return
+    const node = sel.anchorNode.nodeType === Node.ELEMENT_NODE ? sel.anchorNode : sel.anchorNode.parentElement
+    const heading = node?.closest?.('h1, h2, h3, h4')
+    if (heading && editorRef.current?.contains(heading)) {
+      e.preventDefault()
+      document.execCommand('insertParagraph')
+      document.execCommand('formatBlock', false, 'div')
+      markDirty()
+    }
+  }
+
+  // Checkbox kliklərini HTML atributuna sinxronlaşdır ki, saxlananda vəziyyət itməsin
+  const handleEditorClick = (e) => {
+    if (e.target.matches?.('input[type="checkbox"]')) {
+      if (e.target.checked) {
+        e.target.setAttribute('checked', '')
+      } else {
+        e.target.removeAttribute('checked')
+      }
+      markDirty()
+    }
   }
 
   // Ctrl/Cmd+S ilə saxla
@@ -138,13 +208,40 @@ const MeetingNote = () => {
         </button>
       </div>
 
+      {/* Toolbar */}
+      <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 bg-white border border-gray-200 border-b-0 rounded-t-lg">
+        <ToolbarButton title="Qalın (Ctrl+B)" onAction={() => exec('bold')} className="font-bold">B</ToolbarButton>
+        <ToolbarButton title="Kursiv (Ctrl+I)" onAction={() => exec('italic')} className="italic">I</ToolbarButton>
+        <ToolbarButton title="Altdan xətt (Ctrl+U)" onAction={() => exec('underline')} className="underline">U</ToolbarButton>
+        <div className="w-px h-5 bg-gray-200 mx-1" />
+        <ToolbarButton title="Başlıq 1" onAction={() => applyHeading('h1')} className="font-semibold">H1</ToolbarButton>
+        <ToolbarButton title="Başlıq 2" onAction={() => applyHeading('h2')} className="font-semibold">H2</ToolbarButton>
+        <ToolbarButton title="Başlıq 3" onAction={() => applyHeading('h3')} className="font-semibold">H3</ToolbarButton>
+        <ToolbarButton title="Başlıq 4" onAction={() => applyHeading('h4')} className="font-semibold">H4</ToolbarButton>
+        <div className="w-px h-5 bg-gray-200 mx-1" />
+        <ToolbarButton title="Ayırıcı xətt" onAction={() => exec('insertHorizontalRule')}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeWidth={2} d="M4 12h16" />
+          </svg>
+        </ToolbarButton>
+        <ToolbarButton title="Checklist" onAction={insertChecklist}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </ToolbarButton>
+      </div>
+
       {/* Note editor */}
-      <textarea
-        value={content}
-        onChange={handleContentChange}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={markDirty}
+        onKeyDown={handleEditorKeyDown}
+        onClick={handleEditorClick}
         onBlur={() => saveStatus === 'dirty' && handleManualSave()}
-        placeholder="Görüş qeydlərini bura yazın..."
-        className="flex-1 w-full p-4 text-sm text-gray-800 bg-white border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-relaxed"
+        data-placeholder="Görüş qeydlərini bura yazın..."
+        className="note-editor flex-1 w-full p-4 text-sm text-gray-800 bg-white border border-gray-200 rounded-b-lg overflow-y-auto focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-relaxed"
       />
     </div>
   )

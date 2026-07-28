@@ -10,6 +10,8 @@ import {
 import { useVerifyQuery } from '../services/authApi'
 import { useGetUsersQuery } from '../services/adminApi'
 import CreateGroupChatModal from '../components/CreateGroupChatModal'
+import GroupChatSettingsModal from '../components/GroupChatSettingsModal'
+import MessageContent from '../components/MessageContent'
 import { toast } from 'react-toastify'
 import { useWebSocket, useWebSocketSend } from '../hooks/useWebSocket'
 
@@ -44,6 +46,9 @@ const Chat = () => {
   const [messageInput, setMessageInput] = useState('')
   const [view, setView] = useState('chats') // 'chats' or 'users'
   const [showGroupModal, setShowGroupModal] = useState(false)
+  const [showGroupSettings, setShowGroupSettings] = useState(false)
+  const [roomSearchOpen, setRoomSearchOpen] = useState(false)
+  const [roomSearchQuery, setRoomSearchQuery] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const messagesContainerRef = useRef(null)
@@ -62,6 +67,21 @@ const Chat = () => {
 
   // Update active room in WebSocket hook
   useWebSocket(selectedRoom?.id, rooms, currentUser?.id)
+
+  // Otaq dəyişəndə söhbət daxili axtarışı sıfırla
+  useEffect(() => {
+    setRoomSearchOpen(false)
+    setRoomSearchQuery('')
+  }, [selectedRoom?.id])
+
+  // Rooms cache yenilənəndə (üzv əlavə/çıxarma, ad/şəkil dəyişimi) seçilmiş otağı sinxron saxla
+  useEffect(() => {
+    if (!selectedRoom) return
+    const fresh = rooms.find((r) => r.id === selectedRoom.id)
+    if (fresh && fresh !== selectedRoom) {
+      setSelectedRoom(fresh)
+    }
+  }, [rooms]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get sendMessage function from WebSocket hook
   const sendWebSocketMessage = useWebSocketSend()
@@ -224,10 +244,8 @@ const Chat = () => {
   }
 
   const getRoomAvatar = (room) => {
-    console.log(room);
-    
     if (room.type === 'group') {
-      return null // Groups don't have avatars
+      return room.avatar?.url || null
     }
     return room.otherUser?.avatar?.url || null
   }
@@ -260,6 +278,13 @@ const Chat = () => {
   const filteredRooms = rooms.filter((room) =>
     getRoomName(room).toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  // Söhbət daxili mesaj axtarışı
+  const filteredMessages = roomSearchQuery.trim()
+    ? messages.filter((m) =>
+        m.content?.toLowerCase().includes(roomSearchQuery.trim().toLowerCase())
+      )
+    : messages
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp)
@@ -431,17 +456,61 @@ const Chat = () => {
                   </svg>
                 </button>
                 <Avatar src={getRoomAvatar(selectedRoom)} name={getRoomName(selectedRoom)} size="sm" />
-                <div>
+                <div
+                  onClick={() => selectedRoom.type === 'group' && setShowGroupSettings(true)}
+                  className={selectedRoom.type === 'group' ? 'cursor-pointer' : ''}
+                  title={selectedRoom.type === 'group' ? 'Qrup parametrləri' : undefined}
+                >
                   <h3 className="font-semibold text-gray-900">
                     {getRoomName(selectedRoom)}
                   </h3>
                   {selectedRoom.type === 'group' && (
                     <p className="text-sm text-gray-600">
-                      {selectedRoom.memberCount || 0} üzv
+                      {selectedRoom.members?.length || 0} üzv
                     </p>
                   )}
                 </div>
+                <div className="flex-1" />
+                <button
+                  onClick={() => {
+                    setRoomSearchOpen((prev) => {
+                      if (prev) setRoomSearchQuery('')
+                      return !prev
+                    })
+                  }}
+                  className={`p-2 rounded-md transition-colors ${
+                    roomSearchOpen ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  }`}
+                  title="Mesajlarda axtar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
               </div>
+              {roomSearchOpen && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Bu söhbətdə axtar..."
+                    value={roomSearchQuery}
+                    onChange={(e) => setRoomSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setRoomSearchOpen(false)
+                        setRoomSearchQuery('')
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {roomSearchQuery.trim() && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {filteredMessages.length} mesaj tapıldı
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Messages */}
@@ -450,9 +519,11 @@ const Chat = () => {
                 <div className="text-center text-gray-500 py-4">Yüklənir...</div>
               ) : messages.length === 0 ? (
                 <div className="text-center text-gray-500 py-4">Heç bir mesaj yoxdur</div>
+              ) : filteredMessages.length === 0 ? (
+                <div className="text-center text-gray-500 py-4">Axtarışa uyğun mesaj tapılmadı</div>
               ) : (
                 <div className="space-y-3 md:space-y-4">
-                  {messages.map((message) => {
+                  {filteredMessages.map((message) => {
                     const isOwnMessage = message.senderId === currentUser?.id
                     return (
                       <div
@@ -471,7 +542,7 @@ const Chat = () => {
                               {message.sender?.username || 'İstifadəçi'}
                             </p>
                           )}
-                          <p className="text-sm wrap-break-word">{message.content}</p>
+                          <MessageContent content={message.content} isOwnMessage={isOwnMessage} />
                           <div className="flex items-center justify-end gap-1 mt-1">
                             <p
                               className={`text-xs ${
@@ -614,6 +685,16 @@ const Chat = () => {
             setSelectedRoom(room)
             setShowGroupModal(false)
           }}
+        />
+      )}
+
+      {/* Group Settings Modal */}
+      {showGroupSettings && selectedRoom?.type === 'group' && (
+        <GroupChatSettingsModal
+          room={selectedRoom}
+          currentUser={currentUser}
+          onClose={() => setShowGroupSettings(false)}
+          onUpdated={(room) => setSelectedRoom(room)}
         />
       )}
     </div>

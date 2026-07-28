@@ -374,6 +374,20 @@ const TaskLists = () => {
             </button>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
+                {folderId && data?.space && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/tasks/space/${data.space.id || spaceId}`)}
+                      className="text-base md:text-lg font-medium text-gray-500 hover:text-blue-600 hover:underline transition-colors shrink-0"
+                    >
+                      {data.space.name}
+                    </button>
+                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </>
+                )}
                 <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
                 <div className="flex gap-1">
                   <button
@@ -529,6 +543,20 @@ const TaskLists = () => {
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
+              {folderId && data?.space && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/tasks/space/${data.space.id || spaceId}`)}
+                    className="text-base md:text-lg font-medium text-gray-500 hover:text-blue-600 hover:underline transition-colors shrink-0"
+                  >
+                    {data.space.name}
+                  </button>
+                  <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </>
+              )}
               <h1 className="text-xl md:text-2xl font-semibold text-gray-900 truncate">{pageTitle}</h1>
               <div className="flex gap-1">
                 <button

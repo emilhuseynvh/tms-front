@@ -922,6 +922,7 @@ const SpaceItem = ({
   const [editingList, setEditingList] = useState(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const addMenuRef = useRef(null)
+  const addDropdownRef = useRef(null)
 
   // Click outside handler for add menu
   useEffect(() => {
@@ -937,6 +938,13 @@ const SpaceItem = ({
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [addMenuOpen])
+
+  // Dropdown ekrandan kənara düşəndə sidebar-ı ona tərəf scroll et
+  useEffect(() => {
+    if (addMenuOpen && addDropdownRef.current) {
+      addDropdownRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
   }, [addMenuOpen])
 
@@ -1389,7 +1397,7 @@ const SpaceItem = ({
                   <span>Əlavə et</span>
                 </button>
                 {addMenuOpen && (
-                  <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
+                  <div ref={addDropdownRef} className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
                     <button
                       onClick={() => { handleOpenFolderModal(); setAddMenuOpen(false) }}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"

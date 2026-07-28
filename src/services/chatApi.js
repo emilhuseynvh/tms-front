@@ -59,6 +59,32 @@ export const chatApi = createApi({
       ],
     }),
 
+    // Remove member from group (only group admins)
+    removeMemberFromGroup: builder.mutation({
+      query: ({ roomId, userId }) => ({
+        url: '/api/chat/group/remove-member',
+        method: 'POST',
+        body: { roomId, userId },
+      }),
+      invalidatesTags: (result, error, { roomId }) => [
+        { type: 'Rooms', id: roomId },
+        'Rooms',
+      ],
+    }),
+
+    // Update group info (only group admins)
+    updateGroupChat: builder.mutation({
+      query: (groupData) => ({
+        url: '/api/chat/group/update',
+        method: 'POST',
+        body: groupData,
+      }),
+      invalidatesTags: (result, error, { roomId }) => [
+        { type: 'Rooms', id: roomId },
+        'Rooms',
+      ],
+    }),
+
     // Get messages for a room
     getMessages: builder.query({
       query: (roomId) => `/api/chat/rooms/${roomId}/messages`,
@@ -131,6 +157,8 @@ export const {
   useCreateDirectChatMutation,
   useCreateGroupChatMutation,
   useAddMemberToGroupMutation,
+  useRemoveMemberFromGroupMutation,
+  useUpdateGroupChatMutation,
   useGetMessagesQuery,
   useSendMessageMutation,
   useMarkAsReadMutation,

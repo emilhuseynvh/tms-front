@@ -8,6 +8,7 @@ const CreateGroupChatModal = ({ onClose, onCreated }) => {
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   const [selectedUserIds, setSelectedUserIds] = useState([])
+  const [adminId, setAdminId] = useState(0) // 0 = özüm (yaradan)
   const [searchQuery, setSearchQuery] = useState('')
 
   const { data: users = [], isLoading } = useGetUsersQuery()
@@ -27,6 +28,8 @@ const CreateGroupChatModal = ({ onClose, onCreated }) => {
         ? prev.filter((id) => id !== userId)
         : [...prev, userId]
     )
+    // Seçimdən çıxarılan istifadəçi admin seçilibsə, sıfırla
+    setAdminId((prev) => (prev === userId && selectedUserIds.includes(userId) ? 0 : prev))
   }
 
   const handleCreate = async () => {
@@ -41,11 +44,15 @@ const CreateGroupChatModal = ({ onClose, onCreated }) => {
     }
 
     try {
-      const result = await createGroupChat({
+      const payload = {
         name: groupName,
         description: groupDescription,
         memberIds: selectedUserIds.map(Number),
-      }).unwrap()
+      }
+      // Admin seçilibsə göndər; seçilməsə backend yaradanı admin edir
+      if (adminId) payload.adminIds = [Number(adminId)]
+
+      const result = await createGroupChat(payload).unwrap()
       toast.success('Qrup yaradıldı')
       onCreated(result)
     } catch (error) {
@@ -101,6 +108,31 @@ const CreateGroupChatModal = ({ onClose, onCreated }) => {
         {selectedUserIds.length > 0 && (
           <div className="mb-3 px-3 py-2 bg-blue-50 text-blue-700 rounded-md text-sm">
             {selectedUserIds.length} üzv seçildi
+          </div>
+        )}
+
+        {/* Admin selection */}
+        {selectedUserIds.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Qrup admini
+            </label>
+            <select
+              value={adminId}
+              onChange={(e) => setAdminId(Number(e.target.value))}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value={0}>Özüm (yaradan)</option>
+              {selectedUserIds.map((id) => {
+                const user = users.find((u) => u.id === id)
+                return user ? (
+                  <option key={id} value={id}>{user.username}</option>
+                ) : null
+              })}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Admin qrup adını və şəklini dəyişə, üzv əlavə edib çıxara bilər.
+            </p>
           </div>
         )}
 
