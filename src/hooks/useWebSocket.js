@@ -187,11 +187,13 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
           currentUserId
         })
 
-        // Show toast notification and play sound if message is from another user and not in current room
-        if (!isCurrentRoom && !isOwnMessage) {
-          // Play notification sound
+        // Başqasından mesaj gələndə səs həmişə çalınsın — hansı səhifədə/otaqda olmağından asılı olmayaraq
+        if (!isOwnMessage) {
           playNotificationSound()
+        }
 
+        // Toast yalnız həmin söhbət açıq olmayanda göstərilir
+        if (!isCurrentRoom && !isOwnMessage) {
           const senderName = message.sender?.username || 'Bilinməyən'
           toast.info(`${senderName}: ${message.content}`, {
             position: 'top-right',
