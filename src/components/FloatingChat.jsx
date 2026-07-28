@@ -11,6 +11,7 @@ import {
 import { useVerifyQuery } from '../services/authApi'
 import { useGetUsersQuery } from '../services/adminApi'
 import CreateGroupChatModal from './CreateGroupChatModal'
+import GroupChatSettingsModal from './GroupChatSettingsModal'
 import MessageContent from './MessageContent'
 import { toast } from 'react-toastify'
 import { useWebSocketSend, setCurrentActiveRoomId } from '../hooks/useWebSocket'
@@ -64,6 +65,7 @@ const FloatingChat = () => {
   const [messageInput, setMessageInput] = useState('')
   const [view, setView] = useState('chats')
   const [showGroupModal, setShowGroupModal] = useState(false)
+  const [showGroupSettings, setShowGroupSettings] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const messagesContainerRef = useRef(null)
@@ -72,6 +74,15 @@ const FloatingChat = () => {
 
   const { data: currentUser } = useVerifyQuery()
   const { data: rooms = [], isLoading: roomsLoading } = useGetRoomsQuery()
+
+  // Rooms cache yenilənəndə (üzv əlavə/çıxarma, ad/şəkil dəyişimi) seçilmiş otağı sinxron saxla
+  useEffect(() => {
+    if (!selectedRoom) return
+    const fresh = rooms.find((r) => r.id === selectedRoom.id)
+    if (fresh && fresh !== selectedRoom) {
+      setSelectedRoom(fresh)
+    }
+  }, [rooms]) // eslint-disable-line react-hooks/exhaustive-deps
   const { data: users = [], isLoading: usersLoading } = useGetUsersQuery()
   const { data: messages = [], isLoading: messagesLoading } = useGetMessagesQuery(
     selectedRoom?.id,
@@ -95,6 +106,8 @@ const FloatingChat = () => {
   // Close panel when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Modal açıqdırsa (qrup yaratma / qrup parametrləri) panel bağlanmasın
+      if (showGroupModal || showGroupSettings) return
       if (panelRef.current && !panelRef.current.contains(event.target)) {
         // Don't close if clicking on the floating button
         const floatingButton = document.getElementById('floating-chat-button')
@@ -107,7 +120,7 @@ const FloatingChat = () => {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isOpen])
+  }, [isOpen, showGroupModal, showGroupSettings])
 
   // Close emoji picker when clicking outside
   useEffect(() => {
@@ -233,7 +246,7 @@ const FloatingChat = () => {
   }
 
   const getRoomAvatar = (room) => {
-    if (room.type === 'group') return null
+    if (room.type === 'group') return room.avatar?.url || null
     return room.otherUser?.avatar?.url || null
   }
 
@@ -362,7 +375,11 @@ const FloatingChat = () => {
                   </svg>
                 </button>
                 <Avatar src={getRoomAvatar(selectedRoom)} name={getRoomName(selectedRoom)} size="sm" />
-                <div className="flex-1 min-w-0">
+                <div
+                  className={`flex-1 min-w-0 ${selectedRoom.type === 'group' ? 'cursor-pointer' : ''}`}
+                  onClick={() => selectedRoom.type === 'group' && setShowGroupSettings(true)}
+                  title={selectedRoom.type === 'group' ? 'Qrup parametrləri' : undefined}
+                >
                   <h3 className="font-semibold text-sm truncate">{getRoomName(selectedRoom)}</h3>
                   {selectedRoom.type === 'group' && (
                     <p className="text-xs text-blue-100">{selectedRoom.members?.length || 0} üzv</p>
@@ -724,6 +741,15 @@ const FloatingChat = () => {
             setSelectedRoom(room)
             setShowGroupModal(false)
           }}
+        />
+      )}
+
+      {showGroupSettings && selectedRoom?.type === 'group' && (
+        <GroupChatSettingsModal
+          room={selectedRoom}
+          currentUser={currentUser}
+          onClose={() => setShowGroupSettings(false)}
+          onUpdated={(room) => setSelectedRoom(room)}
         />
       )}
     </>

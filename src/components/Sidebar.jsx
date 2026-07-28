@@ -21,6 +21,7 @@ import {
   useArchiveFolderMutation,
   useArchiveListMutation,
   useUpdateTaskMutation,
+  useGetAppSettingsQuery,
   adminApi
 } from '../services/adminApi'
 import { useVerifyQuery, authApi } from '../services/authApi'
@@ -99,6 +100,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const { data: currentUser } = useVerifyQuery()
   const { data: spaces = [] } = useGetMySpacesQuery()
+  const { data: appSettings = {} } = useGetAppSettingsQuery()
+  const workspaceName = appSettings.workspaceName || 'influenser.az'
   const [createSpace, { isLoading: isCreatingSpace }] = useCreateSpaceMutation()
 
   useEffect(() => {
@@ -741,7 +744,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                       }`
                     }
                   >
-                    influenser.az
+                    {workspaceName}
                   </NavLink>
                 </div>
                 {/* Search Input with Add Button */}

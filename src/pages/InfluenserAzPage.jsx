@@ -1,19 +1,91 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
-import { useGetMySpacesQuery } from '../services/adminApi'
+import { useGetMySpacesQuery, useGetAppSettingsQuery, useSetAppSettingMutation } from '../services/adminApi'
+import { useVerifyQuery } from '../services/authApi'
+import { toast } from 'react-toastify'
 
 const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wider text-indigo-600/90'
 
+export const DEFAULT_WORKSPACE_NAME = 'influenser.az'
+
 /**
- * Bütün sahələr və siyahıların tam səhifə görünüşü (sidebar → influenser.az).
+ * Bütün sahələr və siyahıların tam səhifə görünüşü (sidebar → workspace).
  */
 export default function InfluenserAzPage() {
   const { data: mySpaces = [], isLoading } = useGetMySpacesQuery()
+  const { data: settings = {} } = useGetAppSettingsQuery()
+  const { data: currentUser } = useVerifyQuery()
+  const [setAppSetting, { isLoading: isSaving }] = useSetAppSettingMutation()
+
+  const isAdmin = currentUser?.role === 'admin'
+  const workspaceName = settings.workspaceName || DEFAULT_WORKSPACE_NAME
+
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+
+  const startEditing = () => {
+    setNameInput(workspaceName)
+    setIsEditingName(true)
+  }
+
+  const saveName = async () => {
+    if (!nameInput.trim()) return
+    try {
+      await setAppSetting({ key: 'workspaceName', value: nameInput.trim() }).unwrap()
+      toast.success('Workspace adı yeniləndi!')
+      setIsEditingName(false)
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6 md:py-10 min-h-[calc(100vh-8rem)]">
       <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 text-white p-6 sm:p-8 md:p-10 mb-8 md:mb-10 shadow-lg shadow-indigo-900/20 ring-1 ring-white/10">
         <p className="text-indigo-200/90 text-sm font-medium mb-1">Navigasiya</p>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">influenser.az</h1>
+        {isEditingName ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveName()
+                if (e.key === 'Escape') setIsEditingName(false)
+              }}
+              autoFocus
+              className="text-2xl sm:text-3xl font-bold tracking-tight bg-white/10 border border-white/30 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-white/50 text-white min-w-0"
+            />
+            <button
+              onClick={saveName}
+              disabled={isSaving || !nameInput.trim()}
+              className="px-3 py-1.5 text-sm font-medium bg-white text-indigo-900 rounded-md hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+            >
+              Saxla
+            </button>
+            <button
+              onClick={() => setIsEditingName(false)}
+              className="px-3 py-1.5 text-sm font-medium border border-white/40 rounded-md hover:bg-white/10 transition-colors"
+            >
+              Ləğv et
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{workspaceName}</h1>
+            {isAdmin && (
+              <button
+                onClick={startEditing}
+                className="p-1.5 text-indigo-200 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                title="Workspace adını dəyiş"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
         <p className="text-indigo-100/90 mt-2 text-sm sm:text-base max-w-2xl">
           Bütün sahələriniz və onların altındakı siyahılar — bir ekranda.
         </p>
@@ -86,14 +158,17 @@ export default function InfluenserAzPage() {
                     if (lists.length === 0) return null
                     return (
                       <div key={folder.id} className="pt-1 border-t border-gray-100 first:border-t-0 first:pt-0">
-                        <div className={`${sectionLabel} mb-2 flex items-center gap-2`}>
+                        <Link
+                          to={`/tasks/space/${space.id}/folder/${folder.id}`}
+                          className={`${sectionLabel} mb-2 flex items-center gap-2 hover:text-indigo-800 hover:underline transition-colors w-fit`}
+                        >
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-800">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                             </svg>
                           </span>
                           {folder.name}
-                        </div>
+                        </Link>
                         <ul className="grid gap-1 sm:grid-cols-1 lg:grid-cols-2 border-l-2 border-indigo-100 pl-3 ml-1">
                           {lists.map((list) => (
                             <li key={list.id}>

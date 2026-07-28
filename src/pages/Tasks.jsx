@@ -5,6 +5,7 @@ import {
   useCreateFolderMutation,
   useUpdateFolderMutation,
   useDeleteFolderMutation,
+  useGetAppSettingsQuery,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
 import { useConfirm } from '../context/ConfirmContext'
@@ -17,6 +18,8 @@ const Tasks = () => {
   const [editingFolder, setEditingFolder] = useState(null)
 
   const { data: folders = [], isLoading } = useGetFoldersQuery()
+  const { data: appSettings = {} } = useGetAppSettingsQuery()
+  const workspaceName = appSettings.workspaceName || 'influenser.az'
   const [createFolder, { isLoading: isCreating }] = useCreateFolderMutation()
   const [updateFolder, { isLoading: isUpdating }] = useUpdateFolderMutation()
   const [deleteFolder] = useDeleteFolderMutation()
@@ -61,7 +64,7 @@ const Tasks = () => {
               to="/tasks/influenser-az"
               className="w-full sm:w-auto inline-flex justify-center items-center px-4 py-2.5 text-sm font-semibold rounded-lg text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md transition-all"
             >
-              influenser.az
+              {workspaceName}
             </Link>
             <button
               onClick={() => handleOpenModal()}

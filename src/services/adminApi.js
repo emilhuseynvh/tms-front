@@ -12,7 +12,7 @@ export const adminApi = createApi({
       return headers
     },
   }),
-  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'Archive', 'TaskActivities', 'NotificationSettings', 'Notifications'],
+  tagTypes: ['Users', 'Spaces', 'Folders', 'TaskLists', 'Tasks', 'TaskStatuses', 'ActivityLogs', 'Trash', 'Archive', 'TaskActivities', 'NotificationSettings', 'Notifications', 'Settings'],
   endpoints: (builder) => ({
     // Space endpoints
     getSpaces: builder.query({
@@ -112,6 +112,21 @@ export const adminApi = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: ['Users'],
+    }),
+
+    // App settings (key-value)
+    getAppSettings: builder.query({
+      query: () => '/api/settings',
+      providesTags: ['Settings'],
+    }),
+
+    setAppSetting: builder.mutation({
+      query: ({ key, value }) => ({
+        url: '/api/settings',
+        method: 'POST',
+        body: { key, value },
+      }),
+      invalidatesTags: ['Settings'],
     }),
 
     // Update profile
@@ -637,6 +652,8 @@ export const {
   useDeleteUserMutation,
   useUpdateProfileMutation,
   useUploadImageMutation,
+  useGetAppSettingsQuery,
+  useSetAppSettingMutation,
   useUploadAudioMutation,
   // Folder hooks
   useGetFoldersQuery,
