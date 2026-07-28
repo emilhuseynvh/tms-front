@@ -6,8 +6,10 @@ import {
   useRemoveMemberFromGroupMutation,
 } from '../services/chatApi'
 import { toast } from 'react-toastify'
+import { useConfirm } from '../context/ConfirmContext'
 
 const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
+  const { confirm } = useConfirm()
   const { data: users = [] } = useGetUsersQuery()
   const [uploadImage, { isLoading: isUploading }] = useUploadImageMutation()
   const [updateGroupChat, { isLoading: isUpdating }] = useUpdateGroupChatMutation()
@@ -78,6 +80,15 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
   }
 
   const handleRemoveMember = async (userId, username) => {
+    const confirmed = await confirm({
+      title: 'Üzvü qrupdan çıxar',
+      message: `"${username}" qrupdan çıxarılacaq. Əminsiniz?`,
+      confirmText: 'Çıxar',
+      cancelText: 'Ləğv et',
+      type: 'danger',
+    })
+    if (!confirmed) return
+
     try {
       const updated = await removeMemberFromGroup({ roomId: room.id, userId }).unwrap()
       refreshRoom(updated)
