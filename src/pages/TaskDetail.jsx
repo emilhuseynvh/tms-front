@@ -906,8 +906,9 @@ const TaskDetail = () => {
     const getVal = (task) => {
       switch (sortConfig.field) {
         case 'status': {
-          const status = statuses.find(s => s.id === task.statusId)
-          return status?.name?.toLowerCase() || null
+          // Status siyahısındakı sıraya görə (əlifba yox)
+          const index = statuses.findIndex(s => s.id === task.statusId)
+          return index === -1 ? null : index
         }
         case 'updatedAt':
           return task.updatedAt ? new Date(task.updatedAt).getTime() : null
