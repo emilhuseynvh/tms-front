@@ -527,6 +527,15 @@ const Chat = () => {
                 <div className="space-y-3 md:space-y-4">
                   {filteredMessages.map((message) => {
                     const isOwnMessage = message.senderId === currentUser?.id
+                    if (message.isSystem) {
+                      return (
+                        <div key={message.id} className="flex justify-center">
+                          <span className="text-[11px] text-gray-500 bg-gray-100 rounded-full px-3 py-1 text-center">
+                            {message.content}
+                          </span>
+                        </div>
+                      )
+                    }
                     return (
                       <div
                         key={message.id}

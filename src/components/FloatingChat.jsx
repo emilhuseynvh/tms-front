@@ -407,6 +407,15 @@ const FloatingChat = () => {
                 ) : (
                   messages.map((message) => {
                     const isOwnMessage = message.senderId === currentUser?.id
+                    if (message.isSystem) {
+                      return (
+                        <div key={message.id} className="flex justify-center">
+                          <span className="text-[11px] text-gray-500 bg-gray-100 rounded-full px-3 py-1 text-center">
+                            {message.content}
+                          </span>
+                        </div>
+                      )
+                    }
                     return (
                       <div key={message.id} className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
                         <div

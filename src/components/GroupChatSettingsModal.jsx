@@ -4,6 +4,7 @@ import {
   useUpdateGroupChatMutation,
   useAddMemberToGroupMutation,
   useRemoveMemberFromGroupMutation,
+  useSetGroupAdminMutation,
 } from '../services/chatApi'
 import { toast } from 'react-toastify'
 import { useConfirm } from '../context/ConfirmContext'
@@ -16,8 +17,10 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
   const [updateGroupChat, { isLoading: isUpdating }] = useUpdateGroupChatMutation()
   const [addMemberToGroup, { isLoading: isAdding }] = useAddMemberToGroupMutation()
   const [removeMemberFromGroup] = useRemoveMemberFromGroupMutation()
+  const [setGroupAdmin] = useSetGroupAdminMutation()
 
   const [groupName, setGroupName] = useState(room.name || '')
+  const [groupDescription, setGroupDescription] = useState(room.description || '')
   const [addUserId, setAddUserId] = useState('')
   const [cropSrc, setCropSrc] = useState(null)
   const fileInputRef = useRef(null)
@@ -73,6 +76,31 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
       setCropSrc(null)
     } catch (error) {
       toast.error(error?.data?.message || 'Şəkil yüklənərkən xəta baş verdi!')
+    }
+  }
+
+  const handleSaveDescription = async () => {
+    if ((groupDescription || '') === (room.description || '')) return
+    try {
+      const updated = await updateGroupChat({ roomId: room.id, description: groupDescription }).unwrap()
+      refreshRoom(updated)
+      toast.success('Qrup təsviri yeniləndi!')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi')
+    }
+  }
+
+  const handleToggleAdmin = async (member) => {
+    try {
+      const updated = await setGroupAdmin({
+        roomId: room.id,
+        userId: member.userId,
+        isAdmin: !member.isAdmin,
+      }).unwrap()
+      refreshRoom(updated)
+      toast.success(member.isAdmin ? 'Adminlik alındı' : 'Admin təyin edildi')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi')
     }
   }
 
@@ -177,6 +205,35 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
           )}
         </div>
 
+        {/* Group description */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Təsvir</label>
+          {isCurrentUserAdmin ? (
+            <div>
+              <textarea
+                value={groupDescription}
+                onChange={(e) => setGroupDescription(e.target.value)}
+                rows={2}
+                placeholder="Qrup haqqında məlumat..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+              />
+              {(groupDescription || '') !== (room.description || '') && (
+                <button
+                  onClick={handleSaveDescription}
+                  disabled={isUpdating}
+                  className="mt-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                >
+                  Təsviri saxla
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="px-4 py-2 bg-gray-50 rounded-md text-sm text-gray-700 whitespace-pre-wrap">
+              {room.description || <span className="text-gray-400">Təsvir yoxdur</span>}
+            </p>
+          )}
+        </div>
+
         {/* Add member (admins only) */}
         {isCurrentUserAdmin && (
           <div className="mb-4">
@@ -230,15 +287,28 @@ const GroupChatSettingsModal = ({ room, currentUser, onClose, onUpdated }) => {
                   </span>
                 )}
                 {isCurrentUserAdmin && member.userId !== currentUser?.id && (
-                  <button
-                    onClick={() => handleRemoveMember(member.userId, member.user?.username)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors shrink-0"
-                    title="Qrupdan çıxar"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleToggleAdmin(member)}
+                      className={`px-2 py-1 text-[10px] font-medium rounded transition-colors shrink-0 ${
+                        member.isAdmin
+                          ? 'text-amber-700 bg-amber-50 hover:bg-amber-100'
+                          : 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                      }`}
+                      title={member.isAdmin ? 'Adminliyini al' : 'Admin et'}
+                    >
+                      {member.isAdmin ? 'Adminliyi al' : 'Admin et'}
+                    </button>
+                    <button
+                      onClick={() => handleRemoveMember(member.userId, member.user?.username)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors shrink-0"
+                      title="Qrupdan çıxar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </>
                 )}
               </div>
             ))}

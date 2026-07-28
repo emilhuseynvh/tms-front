@@ -187,13 +187,13 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
           currentUserId
         })
 
-        // Başqasından mesaj gələndə səs həmişə çalınsın — hansı səhifədə/otaqda olmağından asılı olmayaraq
-        if (!isOwnMessage) {
+        // Başqasından mesaj gələndə səs həmişə çalınsın — sistem mesajları istisna
+        if (!isOwnMessage && !message.isSystem) {
           playNotificationSound()
         }
 
-        // Toast yalnız həmin söhbət açıq olmayanda göstərilir
-        if (!isCurrentRoom && !isOwnMessage) {
+        // Toast yalnız həmin söhbət açıq olmayanda göstərilir (sistem mesajları istisna)
+        if (!isCurrentRoom && !isOwnMessage && !message.isSystem) {
           const senderName = message.sender?.username || 'Bilinməyən'
           toast.info(`${senderName}: ${message.content}`, {
             position: 'top-right',

@@ -72,6 +72,19 @@ export const chatApi = createApi({
       ],
     }),
 
+    // Set/revoke group admin (only group admins)
+    setGroupAdmin: builder.mutation({
+      query: ({ roomId, userId, isAdmin }) => ({
+        url: '/api/chat/group/set-admin',
+        method: 'POST',
+        body: { roomId, userId, isAdmin },
+      }),
+      invalidatesTags: (result, error, { roomId }) => [
+        { type: 'Rooms', id: roomId },
+        'Rooms',
+      ],
+    }),
+
     // Update group info (only group admins)
     updateGroupChat: builder.mutation({
       query: (groupData) => ({
@@ -181,6 +194,7 @@ export const {
   useAddMemberToGroupMutation,
   useRemoveMemberFromGroupMutation,
   useUpdateGroupChatMutation,
+  useSetGroupAdminMutation,
   useGetMessagesQuery,
   useSendMessageMutation,
   useEditMessageMutation,
