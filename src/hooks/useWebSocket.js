@@ -10,6 +10,7 @@ let globalSocket = null
 let joinedRooms = new Set()
 let currentUserId = null // Store current user ID globally
 let currentActiveRoomId = null // Store currently active room ID globally
+let socketAuthToken = null // Soketin hansı token ilə yaradıldığını izlə (hesab dəyişəndə yenidən qoşulmaq üçün)
 
 export const useWebSocket = (roomId, allRooms = [], userId = null) => {
   const dispatch = useDispatch()
@@ -31,8 +32,18 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
       return
     }
 
+    // Token dəyişibsə (başqa hesabla giriş edilib), köhnə hesabın soketini bağla —
+    // əks halda mesajlar əvvəlki istifadəçinin adından gedir
+    if (globalSocket && socketAuthToken !== token) {
+      console.log('Token changed, reconnecting socket with new identity')
+      globalSocket.disconnect()
+      globalSocket = null
+      joinedRooms = new Set()
+    }
+
     // Only create socket if it doesn't exist
     if (!globalSocket) {
+      socketAuthToken = token
       console.log('Initializing global socket connection with token...')
 
       // Connect to Socket.io server with /chat namespace
@@ -227,7 +238,7 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
 
     // Don't disconnect on unmount since it's global
     // Only disconnect on logout
-  }, [dispatch])
+  }, [dispatch, userId])
 
   // Join all available rooms when they change
   useEffect(() => {
@@ -317,6 +328,7 @@ export const disconnectSocket = () => {
     globalSocket.disconnect()
     globalSocket = null
     joinedRooms.clear()
+    socketAuthToken = null
     console.log('Socket disconnected and cleared')
   }
 }
