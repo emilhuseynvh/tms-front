@@ -15,6 +15,7 @@ import {
   useDeleteTaskListMutation,
   useArchiveListMutation,
   useArchiveTaskMutation,
+  useSendTaskNotificationMutation,
   adminApi,
 } from '../services/adminApi'
 import Modal from '../components/Modal'
@@ -166,6 +167,12 @@ const TaskDetail = () => {
   const [updateTaskList] = useUpdateTaskListMutation()
   const [deleteTaskList] = useDeleteTaskListMutation()
   const [archiveList] = useArchiveListMutation()
+  const [sendTaskNotification] = useSendTaskNotificationMutation()
+
+  // Assignee dropdown-dan seçilmiş istifadəçilərə bildiriş göndər
+  const handleSendTaskNotification = async (taskId, userIds, message) => {
+    return await sendTaskNotification({ taskId, userIds, message }).unwrap()
+  }
   const [archiveTask] = useArchiveTaskMutation()
 
   // Selected tasks state
@@ -1170,6 +1177,7 @@ const TaskDetail = () => {
                 task={task}
                 users={users}
                 onUpdate={handleAssigneesChange}
+                onSendNotification={handleSendTaskNotification}
               />
             </div>
           </td>
@@ -2034,8 +2042,12 @@ const TaskDetail = () => {
 }
 
 // Assignee Selector Component
-const AssigneeSelector = ({ task, users, onUpdate }) => {
+const AssigneeSelector = ({ task, users, onUpdate, onSendNotification }) => {
   const [isOpen, setIsOpen] = useState(false)
+  // Bildiriş göndərmək üçün seçilmiş assignee-lər
+  const [notifySelected, setNotifySelected] = useState(() => new Set())
+  const [notifyMessage, setNotifyMessage] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const ref = useRef(null)
   const triggerRef = useRef(null)
   const dropdownRef = useRef(null)
@@ -2063,6 +2075,34 @@ const AssigneeSelector = ({ task, users, onUpdate }) => {
 
   const handleOpen = () => {
     setIsOpen(!isOpen)
+    if (isOpen) {
+      setNotifySelected(new Set())
+      setNotifyMessage('')
+    }
+  }
+
+  const toggleNotifyUser = (userId) => {
+    setNotifySelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  const handleSendNotification = async () => {
+    if (!notifyMessage.trim() || notifySelected.size === 0) return
+    setIsSending(true)
+    try {
+      await onSendNotification(task.id, [...notifySelected], notifyMessage.trim())
+      toast.success(`${notifySelected.size} nəfərə bildiriş göndərildi!`)
+      setNotifySelected(new Set())
+      setNotifyMessage('')
+    } catch (error) {
+      toast.error(error?.data?.message || 'Bildiriş göndərilə bilmədi!')
+    } finally {
+      setIsSending(false)
+    }
   }
 
   const toggleAssignee = (userId) => {
@@ -2103,23 +2143,66 @@ const AssigneeSelector = ({ task, users, onUpdate }) => {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 max-h-72 overflow-y-auto"
+          className="fixed z-[9999] w-64 bg-white rounded-md shadow-lg border border-gray-200 py-1 max-h-80 overflow-y-auto"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
         >
-          {users.map(user => (
-            <label
-              key={user.id}
-              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={task.assignees?.some(a => a.id === user.id) || false}
-                onChange={() => toggleAssignee(user.id)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          {users.map(user => {
+            const isAssigned = task.assignees?.some(a => a.id === user.id) || false
+            return (
+              <div
+                key={user.id}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50"
+              >
+                <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isAssigned}
+                    onChange={() => toggleAssignee(user.id)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 truncate">{user.username}</span>
+                </label>
+                {isAssigned && (
+                  <button
+                    type="button"
+                    onClick={() => toggleNotifyUser(user.id)}
+                    className={`p-1 rounded transition-colors shrink-0 ${
+                      notifySelected.has(user.id)
+                        ? 'bg-amber-100 text-amber-600'
+                        : 'text-gray-300 hover:text-amber-500 hover:bg-amber-50'
+                    }`}
+                    title={notifySelected.has(user.id) ? 'Bildiriş seçimindən çıxar' : 'Bildiriş göndərmək üçün seç'}
+                  >
+                    <svg className="w-4 h-4" fill={notifySelected.has(user.id) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )
+          })}
+          {/* Seçilmişlərə bildiriş göndərmə paneli */}
+          {notifySelected.size > 0 && (
+            <div className="sticky bottom-0 border-t border-gray-200 bg-gray-50 p-2 space-y-1.5">
+              <p className="text-[11px] text-gray-500">{notifySelected.size} nəfər seçilib</p>
+              <textarea
+                value={notifyMessage}
+                onChange={(e) => setNotifyMessage(e.target.value)}
+                rows={2}
+                autoFocus
+                placeholder="Bildiriş mesajı..."
+                className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none bg-white"
               />
-              <span className="text-sm text-gray-700">{user.username}</span>
-            </label>
-          ))}
+              <button
+                type="button"
+                onClick={handleSendNotification}
+                disabled={isSending || !notifyMessage.trim()}
+                className="w-full px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSending ? 'Göndərilir...' : 'Bildiriş göndər'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

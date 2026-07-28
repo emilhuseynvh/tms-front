@@ -134,6 +134,17 @@ const Users = () => {
                   <tr key={user.id} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
+                        {user.avatar?.url ? (
+                          <img
+                            src={user.avatar.url}
+                            alt={user.username}
+                            className="w-8 h-8 rounded-full object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                            {user.username?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                        )}
                         <span className="text-sm font-medium text-gray-900">{user.username}</span>
                         <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           <button
@@ -191,7 +202,20 @@ const Users = () => {
             {filteredUsers.map((user) => (
               <div key={user.id} className="bg-white rounded-lg border border-gray-200 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-900">{user.username}</h3>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {user.avatar?.url ? (
+                      <img
+                        src={user.avatar.url}
+                        alt={user.username}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                        {user.username?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                    )}
+                    <h3 className="text-sm font-semibold text-gray-900 truncate">{user.username}</h3>
+                  </div>
                   <span
                     className={`inline-flex px-2 py-1 text-xs font-medium rounded ${
                       user.role === 'admin'

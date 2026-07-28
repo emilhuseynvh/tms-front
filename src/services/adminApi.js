@@ -532,6 +532,16 @@ export const adminApi = createApi({
       providesTags: ['Notifications'],
     }),
 
+    // Taska təyin olunanlara xüsusi bildiriş göndər
+    sendTaskNotification: builder.mutation({
+      query: ({ taskId, userIds, message }) => ({
+        url: '/api/notifications/send',
+        method: 'POST',
+        body: { taskId, userIds, message },
+      }),
+      invalidatesTags: ['Notifications'],
+    }),
+
     markNotificationAsRead: builder.mutation({
       query: (id) => ({
         url: `/api/notifications/${id}/read`,
@@ -706,6 +716,7 @@ export const {
   // Notification hooks
   useGetNotificationsQuery,
   useGetUnreadNotificationCountQuery,
+  useSendTaskNotificationMutation,
   useMarkNotificationAsReadMutation,
   useMarkAllNotificationsAsReadMutation,
   useDeleteNotificationMutation,
