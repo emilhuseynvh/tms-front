@@ -1374,7 +1374,11 @@ const TaskDetail = () => {
                       task.assignees.map((assignee) => (
                         <span
                           key={assignee.id}
-                          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700"
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs ${
+                            task.createdById != null && assignee.id === task.createdById
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
                         >
                           {assignee.username}
                         </span>
@@ -2127,15 +2131,21 @@ const AssigneeSelector = ({ task, users, onUpdate, onSendNotification }) => {
       >
         <div className="flex flex-wrap gap-1 min-w-0">
           {task.assignees && task.assignees.length > 0 ? (
-            task.assignees.map((assignee) => (
-              <span
-                key={assignee.id}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 max-w-full"
-                title={assignee.username}
-              >
-                <span className="truncate">{assignee.username}</span>
-              </span>
-            ))
+            task.assignees.map((assignee) => {
+              // Taskı yaradan göy, sonradan əlavə edilənlər boz
+              const isCreator = task.createdById != null && assignee.id === task.createdById
+              return (
+                <span
+                  key={assignee.id}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs max-w-full ${
+                    isCreator ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  }`}
+                  title={isCreator ? `${assignee.username} (yaradan)` : assignee.username}
+                >
+                  <span className="truncate">{assignee.username}</span>
+                </span>
+              )
+            })
           ) : (
             <span className="text-xs text-gray-300 italic">Təyin et...</span>
           )}

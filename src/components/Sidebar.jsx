@@ -1293,6 +1293,7 @@ const SpaceItem = ({
 
         {/* Space adı */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          <CreatorBadge user={space.owner} />
           <svg
             className="w-4 h-4 shrink-0 text-purple-600"
             fill="none"
@@ -1313,12 +1314,9 @@ const SpaceItem = ({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <>
-              <span className="truncate">
-                {space.name}
-              </span>
-              <CreatorBadge user={space.owner} />
-            </>
+            <span className="truncate">
+              {space.name}
+            </span>
           )}
         </div>
 
@@ -1403,6 +1401,7 @@ const SpaceItem = ({
                     } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <CreatorBadge user={list.createdBy} />
                       {list.type === 'meeting' ? (
                         <MeetingNoteIcon className="w-4 h-4 shrink-0 text-gray-400" />
                       ) : (
@@ -1427,12 +1426,9 @@ const SpaceItem = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <>
-                          <span className="truncate">
-                            {list.name}
-                          </span>
-                          <CreatorBadge user={list.createdBy} />
-                        </>
+                        <span className="truncate">
+                          {list.name}
+                        </span>
                       )}
                     </div>
                     {hoveredList === list.id && editingListId !== list.id && (
@@ -1761,6 +1757,7 @@ const FolderItem = ({
 
         {/* Folder adı */}
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          <CreatorBadge user={folder.owner} />
           <svg
             className="w-4 h-4 shrink-0 text-blue-600"
             fill="none"
@@ -1781,12 +1778,9 @@ const FolderItem = ({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <>
-              <span className="truncate">
-                {folder.name}
-              </span>
-              <CreatorBadge user={folder.owner} />
-            </>
+            <span className="truncate">
+              {folder.name}
+            </span>
           )}
         </div>
 
@@ -1864,6 +1858,7 @@ const FolderItem = ({
                     } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <CreatorBadge user={list.createdBy} />
                       {list.type === 'meeting' ? (
                         <MeetingNoteIcon className="w-4 h-4 shrink-0 text-gray-400" />
                       ) : (
@@ -1888,12 +1883,9 @@ const FolderItem = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <>
-                          <span className="truncate">
-                            {list.name}
-                          </span>
-                          <CreatorBadge user={list.createdBy} />
-                        </>
+                        <span className="truncate">
+                          {list.name}
+                        </span>
                       )}
                     </div>
                     {hoveredList === list.id && editingListId !== list.id && (
