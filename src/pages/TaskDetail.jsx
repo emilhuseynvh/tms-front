@@ -26,7 +26,7 @@ import { useFlippedDropdownPosition } from '../hooks/useFlippedDropdownPosition'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
 
-const StatusDropdown = ({ value, statuses, currentStatus, onChange }) => {
+export const StatusDropdown = ({ value, statuses, currentStatus, onChange }) => {
   const [isOpen, setIsOpen] = useState(false)
   const buttonRef = useRef(null)
   const dropdownRef = useRef(null)
@@ -2048,7 +2048,7 @@ const TaskDetail = () => {
 }
 
 // Assignee Selector Component
-const AssigneeSelector = ({ task, users, onUpdate, onSendNotification }) => {
+export const AssigneeSelector = ({ task, users, onUpdate, onSendNotification }) => {
   const [isOpen, setIsOpen] = useState(false)
   // Bildiriş göndərmək üçün seçilmiş assignee-lər
   const [notifySelected, setNotifySelected] = useState(() => new Set())
@@ -2513,7 +2513,7 @@ const TaskFormModal = ({
 }
 
 // Inline Date Picker Component for table cells
-const InlineDatePicker = ({ value, onChange, placeholder }) => {
+export const InlineDatePicker = ({ value, onChange, placeholder }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(null)

@@ -12,6 +12,7 @@ import {
   useArchiveFolderMutation,
   useArchiveListMutation,
   useArchiveTaskMutation,
+  useUpdateTaskMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
   useArchiveSpaceMutation,
@@ -24,7 +25,9 @@ import ModalDatePicker from '../components/ModalDatePicker'
 import { TaskStatusFilterDropdown } from '../components/TaskStatusBadge'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
-import { parseServerTimestamp, filterEndDateParam, filterStartDateParam } from '../utils/bakuTime'
+import { parseServerTimestamp, filterEndDateParam, filterStartDateParam, formatInlineTableDate } from '../utils/bakuTime'
+import TaskActivityTooltip from '../components/TaskActivityTooltip'
+import { StatusDropdown, AssigneeSelector, InlineDatePicker } from './TaskDetail'
 
 const BAKU_TZ = 'Asia/Baku'
 
@@ -45,6 +48,20 @@ function formatTaskTableDate(raw) {
   const d = parseServerTimestamp(raw)
   if (!d) return '—'
   return d.toLocaleDateString('en-GB', { timeZone: BAKU_TZ, day: 'numeric', month: 'numeric', year: '2-digit' })
+}
+
+// Deadline-a neçə gün qaldığını hesabla
+function daysUntilDue(raw) {
+  const d = parseServerTimestamp(raw)
+  if (!d) return null
+  return Math.ceil((d.getTime() - Date.now()) / 86400000)
+}
+
+function dueLabel(diff) {
+  if (diff === null) return ''
+  if (diff < 0) return `${-diff} gün gecikib`
+  if (diff === 0) return 'Bu gün'
+  return `${diff} gün qalıb`
 }
 
 function rootTasksForOverview(tasks) {
@@ -144,6 +161,77 @@ const TaskLists = () => {
   const [archiveFolder] = useArchiveFolderMutation()
   const [archiveList] = useArchiveListMutation()
   const [archiveTask] = useArchiveTaskMutation()
+  const [updateTask] = useUpdateTaskMutation()
+
+  // Üst kartlardakı status filtri
+  const [statusCardFilter, setStatusCardFilter] = useState('all')
+
+  // Folder səhifəsində inline task redaktəsi — TaskDetail-dəki kimi
+  const [editingField, setEditingField] = useState(null) // { taskId, field }
+  const [editingValue, setEditingValue] = useState('')
+
+  const startEditing = (taskId, field, currentValue) => {
+    setEditingField({ taskId, field })
+    setEditingValue(currentValue || '')
+  }
+
+  const cancelEditing = () => {
+    setEditingField(null)
+    setEditingValue('')
+  }
+
+  const saveInlineEdit = async (taskId, field) => {
+    try {
+      const payload = { id: taskId }
+      if (field === 'title') {
+        if (!editingValue.trim()) {
+          cancelEditing()
+          return
+        }
+        payload.title = editingValue.trim()
+      } else if (field === 'description') {
+        payload.description = editingValue
+      }
+      await updateTask(payload).unwrap()
+      cancelEditing()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleInlineKeyDown = (e, taskId, field) => {
+    if (e.key === 'Enter' && field === 'title') {
+      e.preventDefault()
+      saveInlineEdit(taskId, field)
+    }
+    if (e.key === 'Escape') cancelEditing()
+  }
+
+  const handleTaskStatusChange = async (taskId, statusId) => {
+    try {
+      await updateTask({ id: taskId, statusId: statusId ? parseInt(statusId) : null }).unwrap()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleTaskAssigneesChange = async (taskId, assigneeIds) => {
+    try {
+      await updateTask({ id: taskId, assigneeIds }).unwrap()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
+
+  const handleTaskDateChange = async (taskId, field, value) => {
+    try {
+      const payload = { id: taskId }
+      payload[field] = value ? new Date(value).toISOString() : null
+      await updateTask(payload).unwrap()
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
   const [updateSpace] = useUpdateSpaceMutation()
   const [deleteSpace] = useDeleteSpaceMutation()
   const [archiveSpace] = useArchiveSpaceMutation()
@@ -732,6 +820,144 @@ const TaskLists = () => {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Folder icmal kartları: son əlavə edilənlər, deadline, status filtri */}
+          {folderId && allTasks.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* 1. Son əlavə edilənlər */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Son əlavə edilənlər
+                </h3>
+                <div className="space-y-1">
+                  {[...allTasks]
+                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                    .slice(0, 5)
+                    .map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => navigateToList(task.taskListId)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-blue-50 text-left transition-colors"
+                      >
+                        <span className="text-sm text-gray-800 truncate">{task.title}</span>
+                        <span className="text-[11px] text-gray-400 shrink-0">{formatTaskTableDate(task.createdAt)}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              {/* 2. Deadline-a ən az qalanlar */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Deadline yaxınlaşanlar
+                </h3>
+                <div className="space-y-1">
+                  {(() => {
+                    const withDue = allTasks
+                      .filter((t) => t.dueAt)
+                      .map((t) => ({ ...t, _diff: daysUntilDue(t.dueAt) }))
+                      .sort((a, b) => a._diff - b._diff)
+                      .slice(0, 5)
+                    if (withDue.length === 0) {
+                      return <p className="text-xs text-gray-400 px-2 py-1.5">Deadline təyin olunmuş tapşırıq yoxdur</p>
+                    }
+                    return withDue.map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => navigateToList(task.taskListId)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-orange-50 text-left transition-colors"
+                      >
+                        <span className="text-sm text-gray-800 truncate">{task.title}</span>
+                        <span className={`text-[11px] font-medium shrink-0 ${
+                          task._diff < 0 ? 'text-red-600' : task._diff <= 2 ? 'text-orange-600' : 'text-gray-400'
+                        }`}>
+                          {dueLabel(task._diff)}
+                        </span>
+                      </button>
+                    ))
+                  })()}
+                </div>
+              </div>
+
+              {/* 3. Statusa görə tapşırıqlar */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Tapşırıqlar
+                </h3>
+                {/* Status çipləri — yan-yana, üfüqi scroll; boş statuslar gizlədilir */}
+                <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setStatusCardFilter('all')}
+                    className={`px-2 py-0.5 text-xs font-medium rounded-full border transition-colors shrink-0 whitespace-nowrap ${
+                      statusCardFilter === 'all'
+                        ? 'bg-gray-800 text-white border-gray-800'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    Hamısı ({allTasks.length})
+                  </button>
+                  {statuses.map((status) => {
+                    const count = allTasks.filter((t) => (t.statusId ?? t.status?.id) === status.id).length
+                    if (count === 0) return null
+                    const isActiveChip = String(statusCardFilter) === String(status.id)
+                    return (
+                      <button
+                        key={status.id}
+                        type="button"
+                        onClick={() => setStatusCardFilter(isActiveChip ? 'all' : status.id)}
+                        className="px-2 py-0.5 text-xs font-medium rounded-full border transition-all shrink-0 whitespace-nowrap"
+                        style={isActiveChip
+                          ? { backgroundColor: status.color, color: '#fff', borderColor: status.color }
+                          : { backgroundColor: status.color + '15', color: status.color, borderColor: status.color + '55' }}
+                      >
+                        {status.name} ({count})
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="space-y-1 max-h-44 overflow-y-auto">
+                  {(() => {
+                    const filtered = statusCardFilter === 'all'
+                      ? allTasks
+                      : allTasks.filter((t) => (t.statusId ?? t.status?.id) === statusCardFilter)
+                    if (filtered.length === 0) {
+                      return <p className="text-xs text-gray-400 px-2 py-1.5">Bu statusda tapşırıq yoxdur</p>
+                    }
+                    return filtered.map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => navigateToList(task.taskListId)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-green-50 text-left transition-colors"
+                      >
+                        <span className="text-sm text-gray-800 truncate">{task.title}</span>
+                        {task.status && (
+                          <span
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0"
+                            style={{ backgroundColor: task.status.color + '20', color: task.status.color }}
+                          >
+                            {task.status.name}
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+
           {filteredData.folders.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -877,67 +1103,118 @@ const TaskLists = () => {
                       </div>
                       {!isCollapsed && (
                         <div className="overflow-x-auto">
-                          <table className="w-full min-w-[720px] text-sm">
+                          <table className="w-full min-w-[900px] text-sm">
                             <thead>
                               <tr className="border-b border-gray-200 bg-white">
                                 <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Başlıq</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[28%] min-w-[120px]">Açıqlama</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Bitmə</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Status</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Yaradılıb</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Yenilənib</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[22%] min-w-[120px]">Açıqlama</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 min-w-[120px]">Status</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 min-w-[140px]">Təyin edilib</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Son yenilənmə</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap min-w-[130px]">Başlama</th>
+                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap min-w-[130px]">Bitmə</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {rows.length === 0 ? (
                                 <tr>
-                                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-gray-500">
+                                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">
                                     Bu siyahıda tapşırıq yoxdur — tam görünüş üçün siyahıya daxil olun.
                                   </td>
                                 </tr>
                               ) : (
                                 rows.map((task) => (
-                                  <tr
-                                    key={task.id}
-                                    className="hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => navigateToList(list.id, list.type)}
-                                  >
+                                  <tr key={task.id} className="hover:bg-gray-50">
+                                    {/* Başlıq — inline redaktə */}
                                     <td className="px-3 py-2 align-top">
-                                      <div className="flex items-start gap-2 min-w-0">
-                                        <span className="font-medium text-gray-900 line-clamp-2">{task.title}</span>
-                                        {task._subCount > 0 && (
-                                          <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] text-gray-500 bg-gray-100 rounded px-1 py-0.5" title="Alt tapşırıq">
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                                            </svg>
-                                            {task._subCount}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-2 align-top text-gray-600">
-                                      <span className="line-clamp-2 text-xs">{task.description || '—'}</span>
-                                    </td>
-                                    <td className="px-3 py-2 align-top text-gray-600 whitespace-nowrap text-xs">
-                                      {formatTaskTableDate(task.dueAt)}
-                                    </td>
-                                    <td className="px-3 py-2 align-top">
-                                      {task.status ? (
-                                        <span
-                                          className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded"
-                                          style={{ backgroundColor: task.status.color + '20', color: task.status.color }}
-                                        >
-                                          {task.status.name}
-                                        </span>
+                                      {editingField?.taskId === task.id && editingField?.field === 'title' ? (
+                                        <input
+                                          type="text"
+                                          value={editingValue}
+                                          onChange={(e) => setEditingValue(e.target.value)}
+                                          onBlur={() => saveInlineEdit(task.id, 'title')}
+                                          onKeyDown={(e) => handleInlineKeyDown(e, task.id, 'title')}
+                                          autoFocus
+                                          className="w-full px-1.5 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        />
                                       ) : (
-                                        <span className="text-xs text-gray-400">—</span>
+                                        <div
+                                          onClick={() => startEditing(task.id, 'title', task.title)}
+                                          className="flex items-start gap-2 min-w-0 cursor-text hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5"
+                                        >
+                                          <span className="font-medium text-gray-900 wrap-break-word">{task.title}</span>
+                                          {task._subCount > 0 && (
+                                            <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] text-gray-500 bg-gray-100 rounded px-1 py-0.5" title="Alt tapşırıq">
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                                              </svg>
+                                              {task._subCount}
+                                            </span>
+                                          )}
+                                        </div>
                                       )}
                                     </td>
-                                    <td className="px-3 py-2 align-top text-gray-600 whitespace-nowrap text-xs">
-                                      {formatTaskTableDate(task.createdAt)}
+                                    {/* Açıqlama — inline redaktə */}
+                                    <td className="px-3 py-2 align-top text-gray-600">
+                                      {editingField?.taskId === task.id && editingField?.field === 'description' ? (
+                                        <textarea
+                                          value={editingValue}
+                                          onChange={(e) => setEditingValue(e.target.value)}
+                                          onBlur={() => saveInlineEdit(task.id, 'description')}
+                                          onKeyDown={(e) => handleInlineKeyDown(e, task.id, 'description')}
+                                          autoFocus
+                                          rows={2}
+                                          className="w-full text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                                        />
+                                      ) : (
+                                        <div
+                                          onClick={() => startEditing(task.id, 'description', task.description)}
+                                          className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded -mx-1.5"
+                                        >
+                                          <span className="text-xs wrap-break-word">{task.description || <span className="text-gray-300">-</span>}</span>
+                                        </div>
+                                      )}
                                     </td>
-                                    <td className="px-3 py-2 align-top text-gray-600 whitespace-nowrap text-xs">
-                                      {formatTaskTableDate(task.updatedAt)}
+                                    {/* Status — dropdown */}
+                                    <td className="px-3 py-2 align-top">
+                                      <StatusDropdown
+                                        value={task.statusId ?? task.status?.id}
+                                        statuses={statuses}
+                                        currentStatus={task.status}
+                                        onChange={(value) => handleTaskStatusChange(task.id, value)}
+                                      />
+                                    </td>
+                                    {/* Təyin edilib */}
+                                    <td className="px-3 py-2 align-top">
+                                      <AssigneeSelector
+                                        task={task}
+                                        users={users}
+                                        onUpdate={handleTaskAssigneesChange}
+                                      />
+                                    </td>
+                                    {/* Son yenilənmə + əməliyyat tarixçəsi */}
+                                    <td className="px-3 py-2 align-top whitespace-nowrap">
+                                      <TaskActivityTooltip taskId={task.id}>
+                                        <span className="text-xs text-gray-600 cursor-pointer hover:text-indigo-700">
+                                          {formatInlineTableDate(task.updatedAt)}
+                                        </span>
+                                      </TaskActivityTooltip>
+                                    </td>
+                                    {/* Başlama */}
+                                    <td className="px-3 py-2 align-top whitespace-nowrap">
+                                      <InlineDatePicker
+                                        value={task.startAt}
+                                        onChange={(value) => handleTaskDateChange(task.id, 'startAt', value)}
+                                        placeholder="Başlama"
+                                      />
+                                    </td>
+                                    {/* Bitmə */}
+                                    <td className="px-3 py-2 align-top whitespace-nowrap">
+                                      <InlineDatePicker
+                                        value={task.dueAt}
+                                        onChange={(value) => handleTaskDateChange(task.id, 'dueAt', value)}
+                                        placeholder="Bitmə"
+                                      />
                                     </td>
                                   </tr>
                                 ))
@@ -965,7 +1242,8 @@ const TaskLists = () => {
                 {filteredData.tasks.map((task) => (
                   <div
                     key={task.id}
-                    className="p-4 hover:bg-gray-50 transition-colors group"
+                    onClick={() => navigateToList(task.taskListId)}
+                    className="p-4 hover:bg-gray-50 transition-colors group cursor-pointer"
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex-1 min-w-0">
@@ -1005,7 +1283,7 @@ const TaskLists = () => {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => handleArchiveTask(task.id, task.title)}
+                          onClick={(e) => { e.stopPropagation(); handleArchiveTask(task.id, task.title) }}
                           className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
                           title="Arxivə at"
                         >
@@ -1060,6 +1338,7 @@ const TaskLists = () => {
           isUpdating={isUpdatingFolder}
         />
       )}
+
 
       {/* Space/Folder Edit Modal */}
       <Modal
