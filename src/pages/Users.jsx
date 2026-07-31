@@ -285,6 +285,7 @@ const UserFormModal = ({
 }) => {
   const [formData, setFormData] = useState({
     username: '',
+    shortName: '',
     phone: '',
     email: '',
     password: '',
@@ -296,6 +297,7 @@ const UserFormModal = ({
       if (user) {
         setFormData({
           username: user.username || '',
+          shortName: user.shortName || '',
           phone: user.phone || '',
           email: user.email || '',
           password: '',
@@ -304,6 +306,7 @@ const UserFormModal = ({
       } else {
         setFormData({
           username: '',
+          shortName: '',
           phone: '',
           email: '',
           password: '',
@@ -314,7 +317,12 @@ const UserFormModal = ({
   }, [user, isOpen])
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    let { name, value } = e.target
+    // Qısa ad: maks. 3 simvol, hamısı böyük hərf
+    if (name === 'shortName') {
+      value = value.toUpperCase().slice(0, 3)
+    }
+    setFormData({ ...formData, [name]: value })
   }
 
   const handleSubmit = async (e) => {
@@ -343,18 +351,35 @@ const UserFormModal = ({
       title={user ? 'İstifadəçini redaktə et' : 'Yeni istifadəçi'}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            İstifadəçi adı
-          </label>
-          <input
-            type="text"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              İstifadəçi adı
+            </label>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="w-28">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Qısa ad
+            </label>
+            <input
+              type="text"
+              name="shortName"
+              value={formData.shortName}
+              onChange={handleChange}
+              maxLength={3}
+              placeholder="ABC"
+              className="w-full px-3 py-2 text-sm uppercase tracking-widest border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Maks. 3 böyük hərf</p>
+          </div>
         </div>
 
         <div>

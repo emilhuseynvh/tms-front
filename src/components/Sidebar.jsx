@@ -1561,6 +1561,7 @@ const FolderItem = ({
   const [archiveList] = useArchiveListMutation()
 
   const [isListModalOpen, setIsListModalOpen] = useState(false)
+  const [newListType, setNewListType] = useState('list')
   const [editingList, setEditingList] = useState(null)
   const [hoveredList, setHoveredList] = useState(null)
 
@@ -1793,15 +1794,22 @@ const FolderItem = ({
       {isExpanded && (
         <ul className="ml-3 mt-1 space-y-0.5 border-l-2 border-blue-100 pl-3">
           {taskLists.length === 0 ? (
-            <li>
+            <li className="space-y-0.5">
               <button
-                onClick={() => setIsListModalOpen(true)}
+                onClick={() => { setNewListType('list'); setIsListModalOpen(true) }}
                 className="w-full text-left px-2 py-1.5 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 <span>Siyahı əlavə et</span>
+              </button>
+              <button
+                onClick={() => { setNewListType('meeting'); setIsListModalOpen(true) }}
+                className="w-full text-left px-2 py-1.5 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
+              >
+                <MeetingNoteIcon className="w-3.5 h-3.5" />
+                <span>Meeting Note əlavə et</span>
               </button>
             </li>
           ) : (
@@ -1896,13 +1904,22 @@ const FolderItem = ({
               )})}
               <li>
                 <button
-                  onClick={() => handleOpenListModal()}
+                  onClick={() => { setNewListType('list'); handleOpenListModal() }}
                   className="w-full text-left px-2 py-1 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   <span>Siyahı əlavə et</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => { setNewListType('meeting'); handleOpenListModal() }}
+                  className="w-full text-left px-2 py-1 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-2"
+                >
+                  <MeetingNoteIcon className="w-3.5 h-3.5" />
+                  <span>Meeting Note əlavə et</span>
                 </button>
               </li>
             </>
@@ -1915,11 +1932,16 @@ const FolderItem = ({
         onClose={handleCloseListModal}
         folderId={folder.id}
         list={editingList}
+        listType={newListType}
         createTaskList={createTaskList}
         updateTaskList={updateTaskList}
         isCreating={isCreatingList}
         isUpdating={isUpdatingList}
-        onListCreated={(listId) => onNavigate(`/tasks/space/${spaceId}/folder/${folder.id}/list/${listId}`)}
+        onListCreated={(listId) => onNavigate(
+          newListType === 'meeting'
+            ? `/tasks/space/${spaceId}/folder/${folder.id}/note/${listId}`
+            : `/tasks/space/${spaceId}/folder/${folder.id}/list/${listId}`
+        )}
       />
 
       {/* Folder Assignee Modal */}

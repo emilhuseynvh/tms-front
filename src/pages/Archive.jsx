@@ -5,9 +5,21 @@ import {
   useUnarchiveFolderMutation,
   useUnarchiveListMutation,
   useUnarchiveTaskMutation,
+  useGetTaskStatusesQuery,
 } from '../services/adminApi'
 import { useVerifyQuery } from '../services/authApi'
 import { toast } from 'react-toastify'
+import ModalDatePicker from '../components/ModalDatePicker'
+import { TaskStatusFilterDropdown } from '../components/TaskStatusBadge'
+import { parseServerTimestamp, ymdInBakuFromDate, normalizeFilterYmd } from '../utils/bakuTime'
+
+const ARCHIVE_ENTITY_TYPES = [
+  { value: 'all', label: 'Hamısı' },
+  { value: 'space', label: 'Sahə' },
+  { value: 'folder', label: 'Qovluq' },
+  { value: 'list', label: 'Siyahı' },
+  { value: 'task', label: 'Tapşırıq' },
+]
 
 const formatDate = (dateString) => {
   if (!dateString) return '-'
@@ -63,6 +75,11 @@ const Archive = () => {
   const [selectedUserId, setSelectedUserId] = useState('all')
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [searchTerm, setSearchTerm] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const { data: statuses = [] } = useGetTaskStatusesQuery()
 
   const isAdmin = currentUser?.role === 'admin'
 
@@ -110,24 +127,34 @@ const Archive = () => {
     return Array.from(userMap.values())
   }, [allItems])
 
+  // Əməliyyat tarixçəsi ilə eyni filtrlər: axtarış, istifadəçi, element, status, tarix aralığı
   const filteredItems = useMemo(() => {
-    let items = allItems
-    if (selectedUserId !== 'all') {
-      items = items.filter(item => item.archivedBy?.id === Number(selectedUserId))
-    }
     const q = searchTerm.trim().toLowerCase()
-    if (q) {
-      items = items.filter(item =>
+    const startYmd = normalizeFilterYmd(startDate)
+    const endYmd = normalizeFilterYmd(endDate)
+
+    return allItems.filter(item => {
+      if (selectedUserId !== 'all' && item.archivedBy?.id !== Number(selectedUserId)) return false
+      if (typeFilter !== 'all' && item.type !== typeFilter) return false
+      if (statusFilter && !(item.type === 'task' && String(item.statusId) === String(statusFilter))) return false
+      if (q && !(
         (item.name || '').toLowerCase().includes(q) ||
         (item.archivedBy?.username || '').toLowerCase().includes(q)
-      )
-    }
-    return items
-  }, [allItems, selectedUserId, searchTerm])
+      )) return false
+      if (startYmd || endYmd) {
+        const d = parseServerTimestamp(item.archivedAt)
+        const ymd = d ? ymdInBakuFromDate(d) : null
+        if (!ymd) return false
+        if (startYmd && ymd < startYmd) return false
+        if (endYmd && ymd > endYmd) return false
+      }
+      return true
+    })
+  }, [allItems, selectedUserId, searchTerm, typeFilter, statusFilter, startDate, endDate])
 
   useEffect(() => {
     setSelectedItems(new Set())
-  }, [selectedUserId, searchTerm])
+  }, [selectedUserId, searchTerm, typeFilter, statusFilter, startDate, endDate])
 
   const handleItemSelect = (key, checked) => {
     setSelectedItems(prev => {
@@ -199,35 +226,88 @@ const Archive = () => {
           </div>
         </div>
 
-        {/* Search + Admin Filter */}
-        <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-          <div className="relative w-full sm:w-64">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Element axtar..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          {isAdmin && archivedByUsers.length > 0 && (
-            <>
-              <label className="text-xs sm:text-sm text-gray-600">Arxivləyən şəxsə görə:</label>
+        {/* Filters — Əməliyyat tarixçəsi ilə eyni */}
+        <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {/* Search */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Axtar</label>
+              <input
+                type="text"
+                placeholder="Element axtar..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* User Filter — yalnız admin */}
+            {isAdmin && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">İstifadəçi</label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Bütün istifadəçilər</option>
+                  {archivedByUsers.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Entity Type Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Element</label>
               <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="all">Hamısı</option>
-                {archivedByUsers.map(user => (
-                  <option key={user.id} value={user.id}>{user.name}</option>
+                {ARCHIVE_ENTITY_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
-            </>
-          )}
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+              <TaskStatusFilterDropdown
+                value={statusFilter}
+                onChange={setStatusFilter}
+                statuses={statuses}
+                emptyLabel="Bütün statuslar"
+              />
+            </div>
+
+            {/* Tarix aralığı */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Başlama tarixi</label>
+              <ModalDatePicker
+                value={startDate}
+                onChange={setStartDate}
+                placeholder="Başlama tarixi"
+                dateOnly
+                disablePastDays={false}
+                triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Bitmə tarixi</label>
+              <ModalDatePicker
+                value={endDate}
+                onChange={setEndDate}
+                placeholder="Bitmə tarixi"
+                dateOnly
+                disablePastDays={false}
+                triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
