@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux'
 import { io } from 'socket.io-client'
 import { toast } from 'react-toastify'
 import { chatApi } from '../services/chatApi'
+import { adminApi } from '../services/adminApi'
 import { playNotificationSound } from '../utils/notificationSound'
 
 // Global socket instance
@@ -11,6 +12,7 @@ let joinedRooms = new Set()
 let currentUserId = null // Store current user ID globally
 let currentActiveRoomId = null // Store currently active room ID globally
 let socketAuthToken = null // Soketin hansı token ilə yaradıldığını izlə (hesab dəyişəndə yenidən qoşulmaq üçün)
+let notificationSocket = null // Bildirişlər üçün ayrıca namespace (/notifications)
 
 export const useWebSocket = (roomId, allRooms = [], userId = null) => {
   const dispatch = useDispatch()
@@ -39,6 +41,37 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
       globalSocket.disconnect()
       globalSocket = null
       joinedRooms = new Set()
+      if (notificationSocket) {
+        notificationSocket.disconnect()
+        notificationSocket = null
+      }
+    }
+
+    // Bildirişlər üçün real-time kanal (/notifications)
+    if (!notificationSocket) {
+      notificationSocket = io('https://api.tanitim.az/notifications', {
+        auth: { token },
+        extraHeaders: { Authorization: `Bearer ${token}` },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        autoConnect: true,
+        withCredentials: false,
+      })
+
+      notificationSocket.on('notification:new', (notification) => {
+        playNotificationSound()
+        if (notification?.title) {
+          toast.info(notification.title, { position: 'top-right', autoClose: 4000 })
+        }
+        // Bildiriş siyahısını və oxunmamış sayı yenilə
+        dispatch(adminApi.util.invalidateTags(['Notifications']))
+      })
+
+      notificationSocket.on('notification:count', () => {
+        dispatch(adminApi.util.invalidateTags(['Notifications']))
+      })
     }
 
     // Only create socket if it doesn't exist
@@ -330,5 +363,9 @@ export const disconnectSocket = () => {
     joinedRooms.clear()
     socketAuthToken = null
     console.log('Socket disconnected and cleared')
+  }
+  if (notificationSocket) {
+    notificationSocket.disconnect()
+    notificationSocket = null
   }
 }
