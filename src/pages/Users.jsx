@@ -119,6 +119,9 @@ const Users = () => {
                     İstifadəçi adı
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Qısa ad
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                     Email
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
@@ -174,6 +177,15 @@ const Users = () => {
                         </div>
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {user.shortName ? (
+                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold tracking-widest bg-indigo-50 text-indigo-700 rounded">
+                          {user.shortName}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       {user.email}
                     </td>
@@ -215,6 +227,11 @@ const Users = () => {
                       </div>
                     )}
                     <h3 className="text-sm font-semibold text-gray-900 truncate">{user.username}</h3>
+                    {user.shortName && (
+                      <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold tracking-widest bg-indigo-50 text-indigo-700 rounded shrink-0">
+                        {user.shortName}
+                      </span>
+                    )}
                   </div>
                   <span
                     className={`inline-flex px-2 py-1 text-xs font-medium rounded ${

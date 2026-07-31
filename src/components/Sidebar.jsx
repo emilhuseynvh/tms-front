@@ -43,6 +43,21 @@ const getListPath = (list, spaceId, folderId = null) => {
   return list.type === 'meeting' ? `${base}/note/${list.id}` : `${base}/list/${list.id}`
 }
 
+// Elementi yaradan istifadəçinin qısa adı — dairə içində
+const CreatorBadge = ({ user }) => {
+  if (!user) return null
+  const label = user.shortName || user.username?.charAt(0)?.toUpperCase()
+  if (!label) return null
+  return (
+    <span
+      className="inline-flex items-center justify-center min-w-5 h-5 px-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[8px] font-bold shrink-0"
+      title={`Yaradan: ${user.username}`}
+    >
+      {label}
+    </span>
+  )
+}
+
 const MeetingNoteIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -767,7 +782,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
             {/* Spaces List */}
             {isTasksOpen && (
-              <div className="mt-2 ml-3 space-y-2">
+              <div className="mt-2 ml-0.5 space-y-2">
                 {/* Search Input with Add Button */}
                 <div className="px-2 flex gap-1">
                   <input
@@ -824,7 +839,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
                 {/* Workspace-in içi: sahələr */}
                 {isWorkspaceOpen && (
-                <div className="ml-3 pl-2 border-l-2 border-indigo-100 space-y-2">
+                <div className="ml-1 pl-1 border-l-2 border-indigo-100 space-y-2">
                 {isReordering && (
                   <div
                     className="mx-2 mb-2 flex items-center gap-2 rounded-md border border-blue-200 bg-white/90 px-2.5 py-2 text-xs font-medium text-blue-800 shadow-sm"
@@ -1298,9 +1313,12 @@ const SpaceItem = ({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="truncate">
-              {space.name}
-            </span>
+            <>
+              <span className="truncate">
+                {space.name}
+              </span>
+              <CreatorBadge user={space.owner} />
+            </>
           )}
         </div>
 
@@ -1409,9 +1427,12 @@ const SpaceItem = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <span className="truncate">
-                          {list.name}
-                        </span>
+                        <>
+                          <span className="truncate">
+                            {list.name}
+                          </span>
+                          <CreatorBadge user={list.createdBy} />
+                        </>
                       )}
                     </div>
                     {hoveredList === list.id && editingListId !== list.id && (
@@ -1760,9 +1781,12 @@ const FolderItem = ({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="truncate">
-              {folder.name}
-            </span>
+            <>
+              <span className="truncate">
+                {folder.name}
+              </span>
+              <CreatorBadge user={folder.owner} />
+            </>
           )}
         </div>
 
@@ -1864,9 +1888,12 @@ const FolderItem = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                       ) : (
-                        <span className="truncate">
-                          {list.name}
-                        </span>
+                        <>
+                          <span className="truncate">
+                            {list.name}
+                          </span>
+                          <CreatorBadge user={list.createdBy} />
+                        </>
                       )}
                     </div>
                     {hoveredList === list.id && editingListId !== list.id && (

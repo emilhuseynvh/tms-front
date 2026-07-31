@@ -110,27 +110,26 @@ const NotificationBell = () => {
       await markAsRead(notification.id)
     }
 
-    const task = notification.task
-    const taskList = task?.taskList
+    // Backend hər bildiriş üçün hazır keçid URL-i qaytarır (task/list/folder/space)
+    let path = notification.url || null
 
-    if (!taskList) {
-      setIsOpen(false)
-      return
+    // Köhnə backend üçün fallback: task bildirişindən yolu özümüz qur
+    if (!path) {
+      const taskList = notification.task?.taskList
+      if (taskList) {
+        const segment = taskList.type === 'meeting' ? 'note' : 'list'
+        if (taskList.folderId && taskList.folder?.spaceId) {
+          path = `/tasks/space/${taskList.folder.spaceId}/folder/${taskList.folderId}/${segment}/${taskList.id}`
+        } else if (taskList.spaceId) {
+          path = `/tasks/space/${taskList.spaceId}/${segment}/${taskList.id}`
+        }
+      } else if (notification.spaceId) {
+        path = `/tasks/space/${notification.spaceId}`
+      }
     }
 
-    let path = null
-    const listId = taskList.id
-    const spaceId = taskList.spaceId
-    const folderId = taskList.folderId
-
-    if (spaceId && folderId) {
-      path = `/tasks/space/${spaceId}/folder/${folderId}/list/${listId}`
-    } else if (spaceId) {
-      path = `/tasks/space/${spaceId}/list/${listId}`
-    }
-
+    setIsOpen(false)
     if (path) {
-      setIsOpen(false)
       navigate(path)
     }
   }
