@@ -130,6 +130,9 @@ const Users = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
                     Rol
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Brauzer bildirişi
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -201,6 +204,18 @@ const Users = () => {
                         }`}
                       >
                         {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded ${
+                          user.browserNotificationsEnabled
+                            ? 'bg-green-50 text-green-700'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${user.browserNotificationsEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {user.browserNotificationsEnabled ? 'Aktivdir' : 'Deaktivdir'}
                       </span>
                     </td>
                   </tr>

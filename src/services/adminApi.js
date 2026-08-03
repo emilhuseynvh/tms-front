@@ -522,8 +522,8 @@ export const adminApi = createApi({
     }),
 
     getNotifications: builder.query({
-      query: ({ filter = 'all', page = 1, limit = 20 } = {}) =>
-        `/api/notifications?filter=${filter}&page=${page}&limit=${limit}`,
+      query: ({ filter = 'all', page = 1, limit = 20, search = '' } = {}) =>
+        `/api/notifications?filter=${filter}&page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
       providesTags: ['Notifications'],
     }),
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-toastify'
+import BrowserNotificationToggle from '../components/BrowserNotificationToggle'
 import {
   useGetNotificationSettingsQuery,
   useUpdateNotificationSettingsMutation,
@@ -53,6 +54,11 @@ const Settings = () => {
       <div className="mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Tənzimləmələr</h1>
         <p className="text-xs sm:text-sm text-gray-600 mt-1">Sistem tənzimləmələrini idarə edin</p>
+      </div>
+
+      {/* Brauzer bildirişləri */}
+      <div className="mb-4 sm:mb-6">
+        <BrowserNotificationToggle />
       </div>
 
       <div>

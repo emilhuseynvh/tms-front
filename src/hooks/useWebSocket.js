@@ -64,6 +64,22 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
         playNotificationSound()
         if (notification?.title) {
           toast.info(notification.title, { position: 'top-right', autoClose: 4000 })
+
+          // Brauzer bildirişi — istifadəçi aktiv edibsə və icazə varsa
+          try {
+            if (
+              'Notification' in window &&
+              Notification.permission === 'granted' &&
+              localStorage.getItem('browserNotificationsEnabled') === '1'
+            ) {
+              new Notification(notification.title, {
+                body: notification.message || '',
+                icon: '/favicon.ico',
+              })
+            }
+          } catch (e) {
+            console.log('Browser notification failed:', e)
+          }
         }
         // Bildiriş siyahısını və oxunmamış sayı yenilə
         dispatch(adminApi.util.invalidateTags(['Notifications']))

@@ -13,6 +13,7 @@ import MeetingNote from "../pages/MeetingNote";
 import TaskStatuses from "../pages/TaskStatuses";
 import ActivityLogs from "../pages/ActivityLogs";
 import Trash from "../pages/Trash";
+import Notifications from "../pages/Notifications";
 import Archive from "../pages/Archive";
 import Settings from "../pages/Settings";
 import Protected from "./Protected";
@@ -30,6 +31,7 @@ export const router = createBrowserRouter(
                 <Route path="/users" element={<AdminProtected><Users /></AdminProtected>} />
                 <Route path="/statuses" element={<AdminProtected><TaskStatuses /></AdminProtected>} />
                 <Route path="/activity-logs" element={<ActivityLogs />} />
+                <Route path="/notifications" element={<Notifications />} />
                 <Route path="/trash" element={<Trash />} />
                 <Route path="/archive" element={<Archive />} />
                 <Route path="/tasks" element={<Tasks />} />
