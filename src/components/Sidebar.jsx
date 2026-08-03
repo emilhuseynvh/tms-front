@@ -853,7 +853,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
                 {/* Workspace-in içi: sahələr */}
                 {isWorkspaceOpen && (
-                <div className="ml-1 pl-1 border-l-2 border-indigo-100 space-y-2">
+                <div className="ml-0.5 pl-0.5 border-l-2 border-indigo-100 space-y-2">
                 {isReordering && (
                   <div
                     className="mx-2 mb-2 flex items-center gap-2 rounded-md border border-blue-200 bg-white/90 px-2.5 py-2 text-xs font-medium text-blue-800 shadow-sm"
@@ -1370,7 +1370,7 @@ const SpaceItem = ({
 
       {/* Space içəriyi: Folder-lər və birbaşa list-lər */}
       {isExpanded && (
-        <ul className="ml-4 mt-1 space-y-0.5 border-l-2 border-purple-200 pl-3">
+        <ul className="ml-1.5 mt-1 space-y-0.5 border-l-2 border-purple-200 pl-1.5">
               {/* Folder-lər */}
               {folders.map((folder) => (
                 <FolderItem
@@ -1853,7 +1853,7 @@ const FolderItem = ({
 
       {/* Task listləri */}
       {isExpanded && (
-        <ul className="ml-3 mt-1 space-y-0.5 border-l-2 border-blue-100 pl-3">
+        <ul className="ml-1.5 mt-1 space-y-0.5 border-l-2 border-blue-100 pl-1.5">
           {taskLists.length === 0 ? (
             <li className="space-y-0.5">
               <button

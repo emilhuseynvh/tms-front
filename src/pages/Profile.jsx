@@ -11,6 +11,7 @@ const Profile = () => {
 
   const [formData, setFormData] = useState({
     username: '',
+    shortName: '',
     phone: '',
     email: '',
     password: '',
@@ -28,6 +29,7 @@ const Profile = () => {
       
       setFormData({
         username: currentUser.username || '',
+        shortName: currentUser.shortName || '',
         phone: currentUser.phone || '',
         email: currentUser.email || '',
         password: '',
@@ -44,7 +46,12 @@ const Profile = () => {
   }, [currentUser])
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    let { name, value } = e.target
+    // Qısa ad: maks. 3 simvol, hamısı böyük hərf
+    if (name === 'shortName') {
+      value = value.toUpperCase().slice(0, 3)
+    }
+    setFormData({ ...formData, [name]: value })
   }
 
   // Şəkil seçiləndə əvvəlcə crop/resize addımı açılır
@@ -177,6 +184,22 @@ const Profile = () => {
                 required
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Qısa ad
+              </label>
+              <input
+                type="text"
+                name="shortName"
+                value={formData.shortName}
+                onChange={handleChange}
+                maxLength={3}
+                placeholder="ABC"
+                className="w-full px-3 py-2 text-sm uppercase tracking-widest border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-[11px] text-gray-400">Maks. 3 böyük hərf</p>
             </div>
 
             <div>

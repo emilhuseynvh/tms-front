@@ -522,8 +522,14 @@ export const adminApi = createApi({
     }),
 
     getNotifications: builder.query({
-      query: ({ filter = 'all', page = 1, limit = 20, search = '' } = {}) =>
-        `/api/notifications?filter=${filter}&page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+      query: ({ filter = 'all', page = 1, limit = 20, search = '', person = '', startDate = '', endDate = '' } = {}) => {
+        const params = new URLSearchParams({ filter, page, limit })
+        if (search) params.append('search', search)
+        if (person) params.append('person', person)
+        if (startDate) params.append('startDate', startDate)
+        if (endDate) params.append('endDate', endDate)
+        return `/api/notifications?${params.toString()}`
+      },
       providesTags: ['Notifications'],
     }),
 

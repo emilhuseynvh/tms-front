@@ -1260,6 +1260,7 @@ const TaskDetail = () => {
                 </svg>
                 <input
                   ref={newTaskInputRef}
+                  autoFocus
                   type="text"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
@@ -1831,6 +1832,7 @@ const TaskDetail = () => {
                   <form onSubmit={(e) => handleQuickCreate(e, null)} className="flex items-center gap-2">
                     <input
                       ref={newTaskInputRef}
+                      autoFocus
                       type="text"
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
@@ -1942,6 +1944,7 @@ const TaskDetail = () => {
                   )}
                   <input
                     ref={newTaskInputRef}
+                    autoFocus
                     type="text"
                     value={newTaskTitle}
                     onChange={(e) => setNewTaskTitle(e.target.value)}

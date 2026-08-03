@@ -5,8 +5,10 @@ import {
   useMarkNotificationAsReadMutation,
   useMarkAllNotificationsAsReadMutation,
   useDeleteNotificationMutation,
+  useGetUsersQuery,
 } from '../services/adminApi'
-import { formatFullDateTimeBaku, parseServerTimestamp } from '../utils/bakuTime'
+import { formatFullDateTimeBaku, parseServerTimestamp, filterStartDateParam, filterEndDateParam } from '../utils/bakuTime'
+import ModalDatePicker from '../components/ModalDatePicker'
 import BrowserNotificationToggle from '../components/BrowserNotificationToggle'
 
 const FILTERS = [
@@ -71,8 +73,13 @@ const Notifications = () => {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [person, setPerson] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [page, setPage] = useState(1)
   const limit = 20
+
+  const { data: users = [] } = useGetUsersQuery()
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -81,13 +88,16 @@ const Notifications = () => {
 
   useEffect(() => {
     setPage(1)
-  }, [filter, debouncedSearch])
+  }, [filter, debouncedSearch, person, startDate, endDate])
 
   const { data, isLoading } = useGetNotificationsQuery({
     filter,
     page,
     limit,
     search: debouncedSearch,
+    person,
+    startDate: filterStartDateParam(startDate) || '',
+    endDate: filterEndDateParam(endDate) || '',
   })
 
   const [markAsRead] = useMarkNotificationAsReadMutation()
@@ -151,8 +161,8 @@ const Notifications = () => {
 
       {/* Filters — Əməliyyat tarixçəsi ilə eyni üslub */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Axtar</label>
             <input
               type="text"
@@ -161,6 +171,19 @@ const Notifications = () => {
               onChange={(e) => setSearch(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Şəxs</label>
+            <select
+              value={person}
+              onChange={(e) => setPerson(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Bütün şəxslər</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.username}>{user.username}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Vəziyyət</label>
@@ -173,6 +196,28 @@ const Notifications = () => {
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Başlama tarixi</label>
+            <ModalDatePicker
+              value={startDate}
+              onChange={setStartDate}
+              placeholder="Başlama tarixi"
+              dateOnly
+              disablePastDays={false}
+              triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Bitmə tarixi</label>
+            <ModalDatePicker
+              value={endDate}
+              onChange={setEndDate}
+              placeholder="Bitmə tarixi"
+              dateOnly
+              disablePastDays={false}
+              triggerClassName="cursor-pointer flex items-center gap-2 w-full min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-md hover:border-gray-400 transition-colors bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
         </div>
       </div>
