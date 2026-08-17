@@ -6,7 +6,12 @@ import {
   useUnarchiveListMutation,
   useUnarchiveTaskMutation,
   useGetTaskStatusesQuery,
+  useDeleteSpaceMutation,
+  useDeleteFolderMutation,
+  useDeleteTaskListMutation,
+  useDeleteTaskMutation,
 } from '../services/adminApi'
+import { useConfirm } from '../context/ConfirmContext'
 import { useVerifyQuery } from '../services/authApi'
 import { toast } from 'react-toastify'
 import ModalDatePicker from '../components/ModalDatePicker'
@@ -71,6 +76,33 @@ const Archive = () => {
   const [unarchiveFolder, { isLoading: isUnarchivingFolder }] = useUnarchiveFolderMutation()
   const [unarchiveList, { isLoading: isUnarchivingList }] = useUnarchiveListMutation()
   const [unarchiveTask, { isLoading: isUnarchivingTask }] = useUnarchiveTaskMutation()
+  const [deleteSpace] = useDeleteSpaceMutation()
+  const [deleteFolder] = useDeleteFolderMutation()
+  const [deleteTaskList] = useDeleteTaskListMutation()
+  const [deleteTask] = useDeleteTaskMutation()
+  const { confirm } = useConfirm()
+
+  // Arxivdən Zibil qutusuna at (soft delete)
+  const handleDeleteToTrash = async (type, id, name) => {
+    const confirmed = await confirm({
+      title: 'Zibil qutusuna at',
+      message: `"${name}" zibil qutusuna atılacaq. Əminsiniz?`,
+      confirmText: 'Sil',
+      cancelText: 'Ləğv et',
+      type: 'danger',
+    })
+    if (!confirmed) return
+
+    try {
+      if (type === 'space') await deleteSpace(id).unwrap()
+      else if (type === 'folder') await deleteFolder(id).unwrap()
+      else if (type === 'list') await deleteTaskList(id).unwrap()
+      else if (type === 'task') await deleteTask(id).unwrap()
+      toast.success(`"${name}" zibil qutusuna atıldı!`)
+    } catch (error) {
+      toast.error(error?.data?.message || 'Xəta baş verdi!')
+    }
+  }
 
   const [selectedUserId, setSelectedUserId] = useState('all')
   const [selectedItems, setSelectedItems] = useState(new Set())
@@ -416,6 +448,12 @@ const Archive = () => {
                     >
                       Arxivdən çıxar
                     </button>
+                    <button
+                      onClick={() => handleDeleteToTrash(item.type, item.id, item.name || item.title)}
+                      className="flex-1 px-2 py-1.5 text-[10px] font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+                    >
+                      Sil
+                    </button>
                   </div>
                 </div>
 
@@ -426,6 +464,12 @@ const Archive = () => {
                     className="px-3 py-1.5 text-xs font-medium text-amber-600 border border-amber-200 rounded-md hover:bg-amber-50 transition-colors disabled:opacity-50"
                   >
                     Arxivdən çıxar
+                  </button>
+                  <button
+                    onClick={() => handleDeleteToTrash(item.type, item.id, item.name || item.title)}
+                    className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+                  >
+                    Sil
                   </button>
                 </div>
               </div>

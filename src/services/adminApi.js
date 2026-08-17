@@ -67,7 +67,7 @@ export const adminApi = createApi({
         url: `/api/space/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Spaces', 'Trash', 'ActivityLogs'],
+      invalidatesTags: ['Spaces', 'Trash', 'Archive', 'ActivityLogs'],
     }),
 
     reorderSpaces: builder.mutation({
@@ -214,7 +214,7 @@ export const adminApi = createApi({
         url: `/api/folder/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Folders', 'Spaces', 'Trash', 'ActivityLogs'],
+      invalidatesTags: ['Folders', 'Spaces', 'Trash', 'Archive', 'ActivityLogs'],
     }),
 
     reorderFolders: builder.mutation({
@@ -287,7 +287,7 @@ export const adminApi = createApi({
         url: `/api/task-list/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['TaskLists', 'Spaces', 'Folders', 'Trash', 'ActivityLogs'],
+      invalidatesTags: ['TaskLists', 'Spaces', 'Folders', 'Trash', 'Archive', 'ActivityLogs'],
     }),
 
     reorderTaskLists: builder.mutation({
@@ -360,7 +360,7 @@ export const adminApi = createApi({
         url: `/api/task/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Tasks', 'Trash', 'ActivityLogs'],
+      invalidatesTags: ['Tasks', 'Trash', 'Archive', 'ActivityLogs'],
     }),
 
     // Reorder task

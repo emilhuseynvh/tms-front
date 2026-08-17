@@ -629,6 +629,15 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   const allNavItems = [
     {
+      path: '/home',
+      label: 'Ana səhifə',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      ),
+    },
+    {
       path: '/users',
       label: 'İstifadəçilər',
       icon: (
@@ -1074,6 +1083,8 @@ const SpaceItem = ({
   // Space assignee modal state
   const [isSpaceAssigneeModalOpen, setIsSpaceAssigneeModalOpen] = useState(false)
   const { confirm } = useConfirm()
+  const cancelSpaceEditRef = useRef(false)
+  const cancelListEditRef = useRef(false)
 
   // List assignee modal state (for direct space lists)
   const [assigneeListId, setAssigneeListId] = useState(null)
@@ -1095,6 +1106,11 @@ const SpaceItem = ({
   }
 
   const handleSpaceNameSave = async () => {
+    if (cancelSpaceEditRef.current) {
+      cancelSpaceEditRef.current = false
+      setIsEditingSpace(false)
+      return
+    }
     if (editSpaceName.trim() && editSpaceName !== space.name) {
       try {
         await onUpdateSpace({ id: space.id, name: editSpaceName.trim() }).unwrap()
@@ -1109,8 +1125,9 @@ const SpaceItem = ({
 
   const handleSpaceNameKeyDown = (e) => {
     if (e.key === 'Enter') {
-      handleSpaceNameSave()
+      e.currentTarget.blur()
     } else if (e.key === 'Escape') {
+      cancelSpaceEditRef.current = true
       setEditSpaceName(space.name)
       setIsEditingSpace(false)
     }
@@ -1131,6 +1148,11 @@ const SpaceItem = ({
   }
 
   const handleListNameSave = async (listId) => {
+    if (cancelListEditRef.current) {
+      cancelListEditRef.current = false
+      setEditingListId(null)
+      return
+    }
     if (editListName.trim() && editListName !== directLists.find(l => l.id === listId)?.name) {
       try {
         await updateTaskList({ id: listId, name: editListName.trim() }).unwrap()
@@ -1144,8 +1166,9 @@ const SpaceItem = ({
 
   const handleListNameKeyDown = (e, listId) => {
     if (e.key === 'Enter') {
-      handleListNameSave(listId)
+      e.currentTarget.blur()
     } else if (e.key === 'Escape') {
+      cancelListEditRef.current = true
       setEditingListId(null)
     }
   }
@@ -1628,6 +1651,8 @@ const FolderItem = ({
   // Folder assignee modal state
   const [isFolderAssigneeModalOpen, setIsFolderAssigneeModalOpen] = useState(false)
   const { confirm } = useConfirm()
+  const cancelFolderEditRef = useRef(false)
+  const cancelListEditRef = useRef(false)
 
   // List assignee modal state (for folder lists)
   const [assigneeListId, setAssigneeListId] = useState(null)
@@ -1657,6 +1682,11 @@ const FolderItem = ({
   }
 
   const handleFolderNameSave = async () => {
+    if (cancelFolderEditRef.current) {
+      cancelFolderEditRef.current = false
+      setIsEditingFolder(false)
+      return
+    }
     if (editFolderName.trim() && editFolderName !== folder.name) {
       try {
         await onUpdateFolder({ id: folder.id, name: editFolderName.trim() }).unwrap()
@@ -1671,8 +1701,9 @@ const FolderItem = ({
 
   const handleFolderNameKeyDown = (e) => {
     if (e.key === 'Enter') {
-      handleFolderNameSave()
+      e.currentTarget.blur()
     } else if (e.key === 'Escape') {
+      cancelFolderEditRef.current = true
       setEditFolderName(folder.name)
       setIsEditingFolder(false)
     }
@@ -1686,6 +1717,11 @@ const FolderItem = ({
   }
 
   const handleListNameSave = async (listId) => {
+    if (cancelListEditRef.current) {
+      cancelListEditRef.current = false
+      setEditingListId(null)
+      return
+    }
     if (editListName.trim() && editListName !== taskLists.find(l => l.id === listId)?.name) {
       try {
         await updateTaskList({ id: listId, name: editListName.trim() }).unwrap()
@@ -1699,8 +1735,9 @@ const FolderItem = ({
 
   const handleListNameKeyDown = (e, listId) => {
     if (e.key === 'Enter') {
-      handleListNameSave(listId)
+      e.currentTarget.blur()
     } else if (e.key === 'Escape') {
+      cancelListEditRef.current = true
       setEditingListId(null)
     }
   }

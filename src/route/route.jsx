@@ -14,6 +14,7 @@ import TaskStatuses from "../pages/TaskStatuses";
 import ActivityLogs from "../pages/ActivityLogs";
 import Trash from "../pages/Trash";
 import Notifications from "../pages/Notifications";
+import Home from "../pages/Home";
 import Archive from "../pages/Archive";
 import Settings from "../pages/Settings";
 import Protected from "./Protected";
@@ -27,7 +28,8 @@ export const router = createBrowserRouter(
 
             {/* App routes with layout */}
             <Route path="/" element={<Protected><AppLayout /></Protected>}>
-                <Route path="/" element={<Navigate to="/projects" replace />} />
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/home" element={<Home />} />
                 <Route path="/users" element={<AdminProtected><Users /></AdminProtected>} />
                 <Route path="/statuses" element={<AdminProtected><TaskStatuses /></AdminProtected>} />
                 <Route path="/activity-logs" element={<ActivityLogs />} />
