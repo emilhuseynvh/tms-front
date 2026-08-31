@@ -12,7 +12,6 @@ import {
   useArchiveFolderMutation,
   useArchiveListMutation,
   useArchiveTaskMutation,
-  useUpdateTaskMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
   useArchiveSpaceMutation,
@@ -25,9 +24,9 @@ import ModalDatePicker from '../components/ModalDatePicker'
 import { TaskStatusFilterDropdown } from '../components/TaskStatusBadge'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
-import { parseServerTimestamp, filterEndDateParam, filterStartDateParam, formatInlineTableDate } from '../utils/bakuTime'
-import TaskActivityTooltip from '../components/TaskActivityTooltip'
-import { StatusDropdown, AssigneeSelector, InlineDatePicker } from './TaskDetail'
+import { parseServerTimestamp, filterEndDateParam, filterStartDateParam } from '../utils/bakuTime'
+import { assigneeBadgeClassName, assigneeBadgeTitle } from '../utils/assigneeBadge'
+import InlineTaskTable from '../components/InlineTaskTable'
 
 const BAKU_TZ = 'Asia/Baku'
 
@@ -64,15 +63,8 @@ function dueLabel(diff) {
   return `${diff} gün qalıb`
 }
 
-function rootTasksForOverview(tasks) {
-  const list = tasks || []
-  return list
-    .filter((t) => !t.parentId)
-    .map((t) => ({
-      ...t,
-      _subCount: list.filter((st) => st.parentId === t.id).length,
-    }))
-}
+const OVERVIEW_CARD_CLASS =
+  'bg-white rounded-lg border border-gray-200 p-4 flex flex-col h-72 overflow-hidden'
 
 const TaskLists = () => {
   const { spaceId, folderId } = useParams()
@@ -161,77 +153,10 @@ const TaskLists = () => {
   const [archiveFolder] = useArchiveFolderMutation()
   const [archiveList] = useArchiveListMutation()
   const [archiveTask] = useArchiveTaskMutation()
-  const [updateTask] = useUpdateTaskMutation()
 
   // Üst kartlardakı status filtri
   const [statusCardFilter, setStatusCardFilter] = useState('all')
 
-  // Folder səhifəsində inline task redaktəsi — TaskDetail-dəki kimi
-  const [editingField, setEditingField] = useState(null) // { taskId, field }
-  const [editingValue, setEditingValue] = useState('')
-
-  const startEditing = (taskId, field, currentValue) => {
-    setEditingField({ taskId, field })
-    setEditingValue(currentValue || '')
-  }
-
-  const cancelEditing = () => {
-    setEditingField(null)
-    setEditingValue('')
-  }
-
-  const saveInlineEdit = async (taskId, field) => {
-    try {
-      const payload = { id: taskId }
-      if (field === 'title') {
-        if (!editingValue.trim()) {
-          cancelEditing()
-          return
-        }
-        payload.title = editingValue.trim()
-      } else if (field === 'description') {
-        payload.description = editingValue
-      }
-      await updateTask(payload).unwrap()
-      cancelEditing()
-    } catch (error) {
-      toast.error(error?.data?.message || 'Xəta baş verdi!')
-    }
-  }
-
-  const handleInlineKeyDown = (e, taskId, field) => {
-    if (e.key === 'Enter' && field === 'title') {
-      e.preventDefault()
-      saveInlineEdit(taskId, field)
-    }
-    if (e.key === 'Escape') cancelEditing()
-  }
-
-  const handleTaskStatusChange = async (taskId, statusId) => {
-    try {
-      await updateTask({ id: taskId, statusId: statusId ? parseInt(statusId) : null }).unwrap()
-    } catch (error) {
-      toast.error(error?.data?.message || 'Xəta baş verdi!')
-    }
-  }
-
-  const handleTaskAssigneesChange = async (taskId, assigneeIds) => {
-    try {
-      await updateTask({ id: taskId, assigneeIds }).unwrap()
-    } catch (error) {
-      toast.error(error?.data?.message || 'Xəta baş verdi!')
-    }
-  }
-
-  const handleTaskDateChange = async (taskId, field, value) => {
-    try {
-      const payload = { id: taskId }
-      payload[field] = value ? new Date(value).toISOString() : null
-      await updateTask(payload).unwrap()
-    } catch (error) {
-      toast.error(error?.data?.message || 'Xəta baş verdi!')
-    }
-  }
   const [updateSpace] = useUpdateSpaceMutation()
   const [deleteSpace] = useDeleteSpaceMutation()
   const [archiveSpace] = useArchiveSpaceMutation()
@@ -278,10 +203,19 @@ const TaskLists = () => {
     if (filterType === 'all' || filterType === 'folders') {
       items.folders = folders
     }
-    if (filterType === 'all' || filterType === 'lists') {
-      items.lists = directLists
+    if (filterType === 'all' || filterType === 'lists' || filterType === 'tasks') {
+      if (filterType === 'tasks') {
+        items.lists = directLists
+          .map((list) => ({
+            ...list,
+            tasks: (list.tasks || []).filter((t) => allTasks.some((at) => at.id === t.id)),
+          }))
+          .filter((list) => (list.tasks || []).length > 0)
+      } else {
+        items.lists = directLists
+      }
     }
-    if (filterType === 'all' || filterType === 'tasks') {
+    if (filterType === 'tasks' && items.lists.length === 0) {
       items.tasks = allTasks
     }
 
@@ -822,16 +756,16 @@ const TaskLists = () => {
         <div className="space-y-6">
           {/* Folder icmal kartları: son əlavə edilənlər, deadline, status filtri */}
           {folderId && allTasks.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
               {/* 1. Son əlavə edilənlər */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <div className={OVERVIEW_CARD_CLASS}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5 shrink-0">
                   <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Son əlavə edilənlər
                 </h3>
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1 min-h-0 overflow-y-auto">
                   {[...allTasks]
                     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
                     .slice(0, 5)
@@ -850,14 +784,14 @@ const TaskLists = () => {
               </div>
 
               {/* 2. Deadline-a ən az qalanlar */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <div className={OVERVIEW_CARD_CLASS}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5 shrink-0">
                   <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   Deadline yaxınlaşanlar
                 </h3>
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1 min-h-0 overflow-y-auto">
                   {(() => {
                     const withDue = allTasks
                       .filter((t) => t.dueAt)
@@ -887,15 +821,15 @@ const TaskLists = () => {
               </div>
 
               {/* 3. Statusa görə tapşırıqlar */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <div className={OVERVIEW_CARD_CLASS}>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5 shrink-0">
                   <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Tapşırıqlar
                 </h3>
                 {/* Status çipləri — yan-yana, üfüqi scroll; boş statuslar gizlədilir */}
-                <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+                <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => setStatusCardFilter('all')}
@@ -926,7 +860,7 @@ const TaskLists = () => {
                     )
                   })}
                 </div>
-                <div className="space-y-1 max-h-44 overflow-y-auto">
+                <div className="space-y-1 flex-1 min-h-0 overflow-y-auto">
                   {(() => {
                     const filtered = statusCardFilter === 'all'
                       ? allTasks
@@ -1029,7 +963,7 @@ const TaskLists = () => {
               <div className="space-y-4">
                 {filteredData.lists.map((list) => {
                   const isCollapsed = collapsedListIds.has(list.id)
-                  const rows = rootTasksForOverview(list.tasks)
+                  const isMeeting = list.type === 'meeting'
                   return (
                     <div key={list.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                       {listBreadcrumb && (
@@ -1061,12 +995,15 @@ const TaskLists = () => {
                         >
                           {list.name}
                         </button>
+                        <span className="hidden sm:inline text-[11px] text-gray-400 shrink-0 px-1">
+                          {(list.tasks || []).filter((t) => !t.parentId).length} tapşırıq
+                        </span>
                         <button
                           type="button"
                           onClick={() => navigateToList(list.id, list.type)}
                           className="hidden sm:inline text-xs text-blue-600 hover:underline shrink-0 px-2"
                         >
-                          + Tapşırıq əlavə et
+                          Tam görünüş
                         </button>
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button
@@ -1102,126 +1039,20 @@ const TaskLists = () => {
                         </div>
                       </div>
                       {!isCollapsed && (
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[900px] text-sm">
-                            <thead>
-                              <tr className="border-b border-gray-200 bg-white">
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Başlıq</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[22%] min-w-[120px]">Açıqlama</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 min-w-[120px]">Status</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 min-w-[140px]">Təyin edilib</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Son yenilənmə</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap min-w-[130px]">Başlama</th>
-                                <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap min-w-[130px]">Bitmə</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {rows.length === 0 ? (
-                                <tr>
-                                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">
-                                    Bu siyahıda tapşırıq yoxdur — tam görünüş üçün siyahıya daxil olun.
-                                  </td>
-                                </tr>
-                              ) : (
-                                rows.map((task) => (
-                                  <tr key={task.id} className="hover:bg-gray-50">
-                                    {/* Başlıq — inline redaktə */}
-                                    <td className="px-3 py-2 align-top">
-                                      {editingField?.taskId === task.id && editingField?.field === 'title' ? (
-                                        <input
-                                          type="text"
-                                          value={editingValue}
-                                          onChange={(e) => setEditingValue(e.target.value)}
-                                          onBlur={() => saveInlineEdit(task.id, 'title')}
-                                          onKeyDown={(e) => handleInlineKeyDown(e, task.id, 'title')}
-                                          autoFocus
-                                          className="w-full px-1.5 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                      ) : (
-                                        <div
-                                          onClick={() => startEditing(task.id, 'title', task.title)}
-                                          className="flex items-start gap-2 min-w-0 cursor-text hover:bg-gray-100 px-1.5 py-0.5 rounded -mx-1.5"
-                                        >
-                                          <span className="font-medium text-gray-900 wrap-break-word">{task.title}</span>
-                                          {task._subCount > 0 && (
-                                            <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] text-gray-500 bg-gray-100 rounded px-1 py-0.5" title="Alt tapşırıq">
-                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                                              </svg>
-                                              {task._subCount}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </td>
-                                    {/* Açıqlama — inline redaktə */}
-                                    <td className="px-3 py-2 align-top text-gray-600">
-                                      {editingField?.taskId === task.id && editingField?.field === 'description' ? (
-                                        <textarea
-                                          value={editingValue}
-                                          onChange={(e) => setEditingValue(e.target.value)}
-                                          onBlur={() => saveInlineEdit(task.id, 'description')}
-                                          onKeyDown={(e) => handleInlineKeyDown(e, task.id, 'description')}
-                                          autoFocus
-                                          rows={2}
-                                          className="w-full text-xs border border-blue-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                                        />
-                                      ) : (
-                                        <div
-                                          onClick={() => startEditing(task.id, 'description', task.description)}
-                                          className="cursor-text hover:bg-gray-100 px-1.5 py-1 rounded -mx-1.5"
-                                        >
-                                          <span className="text-xs wrap-break-word">{task.description || <span className="text-gray-300">-</span>}</span>
-                                        </div>
-                                      )}
-                                    </td>
-                                    {/* Status — dropdown */}
-                                    <td className="px-3 py-2 align-top">
-                                      <StatusDropdown
-                                        value={task.statusId ?? task.status?.id}
-                                        statuses={statuses}
-                                        currentStatus={task.status}
-                                        onChange={(value) => handleTaskStatusChange(task.id, value)}
-                                      />
-                                    </td>
-                                    {/* Təyin edilib */}
-                                    <td className="px-3 py-2 align-top">
-                                      <AssigneeSelector
-                                        task={task}
-                                        users={users}
-                                        onUpdate={handleTaskAssigneesChange}
-                                      />
-                                    </td>
-                                    {/* Son yenilənmə + əməliyyat tarixçəsi */}
-                                    <td className="px-3 py-2 align-top whitespace-nowrap">
-                                      <TaskActivityTooltip taskId={task.id}>
-                                        <span className="text-xs text-gray-600 cursor-pointer hover:text-indigo-700">
-                                          {formatInlineTableDate(task.updatedAt)}
-                                        </span>
-                                      </TaskActivityTooltip>
-                                    </td>
-                                    {/* Başlama */}
-                                    <td className="px-3 py-2 align-top whitespace-nowrap">
-                                      <InlineDatePicker
-                                        value={task.startAt}
-                                        onChange={(value) => handleTaskDateChange(task.id, 'startAt', value)}
-                                        placeholder="Başlama"
-                                      />
-                                    </td>
-                                    {/* Bitmə */}
-                                    <td className="px-3 py-2 align-top whitespace-nowrap">
-                                      <InlineDatePicker
-                                        value={task.dueAt}
-                                        onChange={(value) => handleTaskDateChange(task.id, 'dueAt', value)}
-                                        placeholder="Bitmə"
-                                      />
-                                    </td>
-                                  </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
+                        isMeeting ? (
+                          <div className="px-3 py-3 text-sm text-gray-500">
+                            Meeting note —{' '}
+                            <button type="button" onClick={() => navigateToList(list.id, list.type)} className="text-blue-600 hover:underline">
+                              açmaq üçün klikləyin
+                            </button>
+                          </div>
+                        ) : (
+                          <InlineTaskTable
+                            tasks={list.tasks || []}
+                            taskListId={list.id}
+                            emptyText="Bu siyahıda tapşırıq yoxdur — aşağıdan əlavə edin."
+                          />
+                        )
                       )}
                     </div>
                   )
@@ -1267,8 +1098,12 @@ const TaskLists = () => {
                               <span className="mx-1">•</span>
                               <div className="flex -space-x-1">
                                 {task.assignees.slice(0, 3).map((a) => (
-                                  <div key={a.id} className="w-5 h-5 rounded-full bg-gray-300 border border-white flex items-center justify-center text-[10px] font-medium text-gray-600">
-                                    {a.name?.charAt(0) || a.email?.charAt(0)}
+                                  <div
+                                    key={a.id}
+                                    title={assigneeBadgeTitle(task, a)}
+                                    className={`w-5 h-5 rounded-full border border-white flex items-center justify-center text-[10px] font-medium ${assigneeBadgeClassName(task, a.id)}`}
+                                  >
+                                    {a.name?.charAt(0) || a.username?.charAt(0) || a.email?.charAt(0)}
                                   </div>
                                 ))}
                                 {task.assignees.length > 3 && (

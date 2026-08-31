@@ -45,7 +45,11 @@ const ListBlock = ({ list, folderName, spaceId, folderId, navigate }) => {
           </button>
         </div>
       ) : (
-        <InlineTaskTable tasks={list.tasks || []} emptyText="Bu siyahıda tapşırıq yoxdur" />
+        <InlineTaskTable
+          tasks={list.tasks || []}
+          taskListId={list.id}
+          emptyText="Bu siyahıda tapşırıq yoxdur"
+        />
       )}
     </div>
   )

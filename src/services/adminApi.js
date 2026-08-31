@@ -1,12 +1,13 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
+import { API_BASE_URL } from '../config/api'
 
 export const adminApi = createApi({
   reducerPath: 'adminApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'https://api.tanitim.az/',
+    baseUrl: `${API_BASE_URL}/`,
     prepareHeaders: (headers) => {
-      const token = localStorage.getItem('token')
-      if (token) {
+      const token = localStorage.getItem('token')?.replace(/^"|"$/g, '').trim()
+      if (token && token !== 'null' && token !== 'undefined') {
         headers.set('Authorization', `Bearer ${token}`)
       }
       return headers
@@ -337,7 +338,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: taskData,
       }),
-      invalidatesTags: ['Tasks', 'ActivityLogs'],
+      invalidatesTags: ['Tasks', 'Folders', 'Spaces', 'ActivityLogs'],
     }),
 
     // Update task
@@ -349,6 +350,8 @@ export const adminApi = createApi({
       }),
       invalidatesTags: (_result, _error, { id }) => [
         'Tasks',
+        'Folders',
+        'Spaces',
         'ActivityLogs',
         { type: 'TaskActivities', id }
       ],
@@ -360,7 +363,7 @@ export const adminApi = createApi({
         url: `/api/task/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Tasks', 'Trash', 'Archive', 'ActivityLogs'],
+      invalidatesTags: ['Tasks', 'Folders', 'Spaces', 'Trash', 'Archive', 'ActivityLogs'],
     }),
 
     // Reorder task
@@ -638,7 +641,7 @@ export const adminApi = createApi({
         url: `/api/archive/task/${id}`,
         method: 'POST',
       }),
-      invalidatesTags: ['Archive', 'Tasks'],
+      invalidatesTags: ['Archive', 'Tasks', 'Folders', 'Spaces'],
     }),
 
     unarchiveTask: builder.mutation({
