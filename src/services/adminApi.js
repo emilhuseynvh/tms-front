@@ -373,7 +373,7 @@ export const adminApi = createApi({
         method: 'POST',
         body: reorderData,
       }),
-      invalidatesTags: ['Tasks'],
+      invalidatesTags: ['Tasks', 'Folders', 'Spaces'],
     }),
 
     // Get task activities (for hover)

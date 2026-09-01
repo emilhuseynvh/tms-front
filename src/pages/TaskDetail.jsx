@@ -22,6 +22,7 @@ import Modal from '../components/Modal'
 import ModalDatePicker from '../components/ModalDatePicker'
 import TaskActivityTooltip from '../components/TaskActivityTooltip'
 import { formatInlineTableDate } from '../utils/bakuTime'
+import { assigneeBadgeClassName, assigneeBadgeTitle } from '../utils/assigneeBadge'
 import { useFlippedDropdownPosition } from '../hooks/useFlippedDropdownPosition'
 import { useConfirm } from '../context/ConfirmContext'
 import { toast } from 'react-toastify'
@@ -115,6 +116,9 @@ const TaskDetail = () => {
   const [editingTask, setEditingTask] = useState(null)
   const [parentTaskId, setParentTaskId] = useState(null)
   const [draggedTask, setDraggedTask] = useState(null)
+  const draggedTaskRef = useRef(null)
+  const dropTargetRef = useRef(null)
+  const dropInFlightRef = useRef(false)
   const [expandedTasks, setExpandedTasks] = useState(new Set())
   const [hoveredTaskId, setHoveredTaskId] = useState(null)
   const [actionMenuPosition, setActionMenuPosition] = useState(null)
@@ -581,8 +585,33 @@ const TaskDetail = () => {
   const [dropTarget, setDropTarget] = useState(null) // { taskId, type: 'above' | 'below' | 'inside' }
 
   const handleDragStart = (e, task, index) => {
-    setDraggedTask({ task, index })
+    if (e.target.closest('input, textarea, button, a, select, [contenteditable="true"]')) {
+      e.preventDefault()
+      return
+    }
+    const payload = { task, index }
+    draggedTaskRef.current = payload
+    setDraggedTask(payload)
     e.dataTransfer.effectAllowed = 'move'
+
+    const flattenTasks = (list, acc = []) => {
+      for (const t of list || []) {
+        acc.push(t)
+        if (t.children?.length) flattenTasks(t.children, acc)
+      }
+      return acc
+    }
+    const moveSelection = selectedTasks.has(task.id) && selectedTasks.size > 1
+    const selectedIds = moveSelection ? selectedTasks : new Set([task.id])
+    const dragTasks = flattenTasks(tasks)
+      .filter((t) => selectedIds.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        parentId: t.parentId ?? null,
+        taskListId: t.taskListId ?? parseInt(taskListId, 10),
+      }))
+
     const dragPayload = JSON.stringify({
       type: 'task',
       task: {
@@ -591,6 +620,7 @@ const TaskDetail = () => {
         parentId: task.parentId ?? null,
         taskListId: task.taskListId ?? parseInt(taskListId, 10),
       },
+      tasks: dragTasks,
     })
     e.dataTransfer.setData('text/plain', dragPayload)
     e.dataTransfer.setData('application/task', dragPayload)
@@ -601,12 +631,13 @@ const TaskDetail = () => {
     e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
 
-    if (!draggedTask || draggedTask.task.id === targetTask?.id) {
+    const dragged = draggedTaskRef.current
+    if (!dragged || !targetTask || dragged.task.id === targetTask.id) {
+      dropTargetRef.current = null
       setDropTarget(null)
       return
     }
 
-    // Prevent dropping a parent into its own children
     const isDescendant = (parentTask, childId) => {
       if (!parentTask.children) return false
       for (const child of parentTask.children) {
@@ -616,16 +647,16 @@ const TaskDetail = () => {
       return false
     }
 
-    if (targetTask && isDescendant(draggedTask.task, targetTask.id)) {
+    if (isDescendant(dragged.task, targetTask.id)) {
+      dropTargetRef.current = null
       setDropTarget(null)
       return
     }
 
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
-    const height = rect.height
+    const height = rect.height || 1
 
-    // Top 25% = above, Bottom 25% = below, Middle 50% = inside (subtask)
     let type = 'inside'
     if (y < height * 0.25) {
       type = 'above'
@@ -633,73 +664,84 @@ const TaskDetail = () => {
       type = 'below'
     }
 
-    setDropTarget({ taskId: targetTask?.id, type })
+    const next = { taskId: targetTask.id, type }
+    dropTargetRef.current = next
+    setDropTarget(next)
   }
 
   const handleDragLeave = (e) => {
     e.preventDefault()
-    // Only clear if we're leaving the actual element, not entering a child
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-      setDropTarget(null)
-    }
+  }
+
+  const clearDragState = () => {
+    draggedTaskRef.current = null
+    dropTargetRef.current = null
+    setDraggedTask(null)
+    setDropTarget(null)
   }
 
   const handleDrop = async (e, targetTask, targetIndex) => {
     e.preventDefault()
     e.stopPropagation()
+    dropInFlightRef.current = true
 
-    if (!draggedTask) {
-      setDraggedTask(null)
-      setDropTarget(null)
+    const dragged = draggedTaskRef.current
+    const zone = dropTargetRef.current
+
+    if (!dragged?.task || !targetTask || dragged.task.id === targetTask.id) {
+      dropInFlightRef.current = false
+      clearDragState()
       return
     }
 
-    // Prevent dropping on itself
-    if (draggedTask.task.id === targetTask?.id) {
-      setDraggedTask(null)
-      setDropTarget(null)
-      return
-    }
+    const fromIndex = dragged.index
+    const draggedParentId = dragged.task.parentId ?? null
+    const targetParentId = targetTask.parentId ?? null
+    const dropType = zone?.type || 'above'
 
     try {
-      if (dropTarget?.type === 'inside' && targetTask) {
-        // Make it a subtask of the target
-        await updateTask({
-          id: draggedTask.task.id,
-          parentId: targetTask.id
+      if (dropType === 'inside') {
+        await reorderTask({
+          taskId: dragged.task.id,
+          parentId: targetTask.id,
+          targetIndex: 9999,
         }).unwrap()
         toast.success('Tapşırıq alt tapşırıq olaraq əlavə edildi')
-      } else if (dropTarget?.type === 'above' || dropTarget?.type === 'below') {
-        // If dragged task has a parent but target doesn't (or has different parent), move to root
-        if (draggedTask.task.parentId && (!targetTask?.parentId || draggedTask.task.parentId !== targetTask?.parentId)) {
-          await updateTask({
-            id: draggedTask.task.id,
-            parentId: null
-          }).unwrap()
-        }
-        // Reorder
-        await reorderTask({
-          taskId: draggedTask.task.id,
-          targetIndex: dropTarget?.type === 'below' ? targetIndex + 1 : targetIndex,
-        }).unwrap()
       } else {
-        // Default reorder behavior
-        await reorderTask({
-          taskId: draggedTask.task.id,
-          targetIndex: targetIndex,
-        }).unwrap()
+        const insertBefore = dropType === 'below' ? targetIndex + 1 : targetIndex
+        const sameParent = draggedParentId === targetParentId
+        let toIndex = insertBefore
+        if (sameParent && fromIndex < insertBefore) {
+          toIndex = insertBefore - 1
+        }
+
+        const payload = {
+          taskId: dragged.task.id,
+          targetIndex: Math.max(0, toIndex),
+        }
+        if (!sameParent) {
+          payload.parentId = targetParentId
+        }
+
+        if (sameParent && toIndex === fromIndex) {
+          dropInFlightRef.current = false
+          clearDragState()
+          return
+        }
+
+        await reorderTask(payload).unwrap()
       }
     } catch (error) {
       toast.error(error?.data?.message || 'Xəta baş verdi!')
     }
 
-    setDraggedTask(null)
-    setDropTarget(null)
+    dropInFlightRef.current = false
+    clearDragState()
   }
 
   const handleDragEnd = () => {
-    setDraggedTask(null)
-    setDropTarget(null)
+    if (dropInFlightRef.current) return
+    clearDragState()
   }
 
   // Make a subtask a root task (remove from parent)
@@ -1010,26 +1052,31 @@ const TaskDetail = () => {
 
   // Bütün taskları (subtasklar daxil) avtomatik aç
   useEffect(() => {
-    if (tasks && tasks.length > 0) {
-      // Recursive funksiya: bütün task ID-lərini topla
-      const getAllTaskIds = (taskList) => {
-        const ids = []
-        for (const task of taskList) {
-          ids.push(task.id)
-          if (task.children && task.children.length > 0) {
-            ids.push(...getAllTaskIds(task.children))
-          }
+    const getAllTaskIds = (taskList) => {
+      const ids = []
+      for (const task of taskList || []) {
+        ids.push(task.id)
+        if (task.children && task.children.length > 0) {
+          ids.push(...getAllTaskIds(task.children))
         }
-        return ids
       }
+      return ids
+    }
 
-      const allTaskIds = getAllTaskIds(tasks)
+    const allTaskIds = getAllTaskIds(tasks)
+    if (allTaskIds.length > 0) {
       setExpandedTasks(prev => {
         const newSet = new Set(prev)
         allTaskIds.forEach(id => newSet.add(id))
         return newSet
       })
     }
+    setSelectedTasks((prev) => {
+      const existing = new Set(allTaskIds)
+      const next = new Set([...prev].filter((id) => existing.has(id)))
+      if (next.size === prev.size) return prev
+      return next
+    })
   }, [tasks])
 
   // Recursive function to render task rows
@@ -1312,8 +1359,9 @@ const TaskDetail = () => {
         <div
           draggable
           onDragStart={(e) => handleDragStart(e, task, index)}
-          onDragOver={handleDragOver}
-          onDrop={(e) => handleDrop(e, index)}
+          onDragOver={(e) => handleDragOver(e, task)}
+          onDrop={(e) => handleDrop(e, task, index)}
+          onDragEnd={handleDragEnd}
           className={`bg-white rounded-lg border border-gray-200 p-4 mb-3 ${
             draggedTask?.task.id === task.id ? 'opacity-50' : ''
           }`}
@@ -1375,11 +1423,8 @@ const TaskDetail = () => {
                       task.assignees.map((assignee) => (
                         <span
                           key={assignee.id}
-                          className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs ${
-                            task.createdById != null && assignee.id === task.createdById
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs ${assigneeBadgeClassName(task, assignee.id)}`}
+                          title={assigneeBadgeTitle(task, assignee)}
                         >
                           {assignee.username}
                         </span>
@@ -2134,21 +2179,15 @@ export const AssigneeSelector = ({ task, users, onUpdate, onSendNotification }) 
       >
         <div className="flex flex-wrap gap-1 min-w-0">
           {task.assignees && task.assignees.length > 0 ? (
-            task.assignees.map((assignee) => {
-              // Taskı yaradan göy, sonradan əlavə edilənlər boz
-              const isCreator = task.createdById != null && assignee.id === task.createdById
-              return (
-                <span
-                  key={assignee.id}
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs max-w-full ${
-                    isCreator ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                  }`}
-                  title={isCreator ? `${assignee.username} (yaradan)` : assignee.username}
-                >
-                  <span className="truncate">{assignee.username}</span>
-                </span>
-              )
-            })
+            task.assignees.map((assignee) => (
+              <span
+                key={assignee.id}
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs max-w-full ${assigneeBadgeClassName(task, assignee.id)}`}
+                title={assigneeBadgeTitle(task, assignee)}
+              >
+                <span className="truncate">{assignee.username}</span>
+              </span>
+            ))
           ) : (
             <span className="text-xs text-gray-300 italic">Təyin et...</span>
           )}
@@ -2537,11 +2576,11 @@ export const InlineDatePicker = ({ value, onChange, placeholder }) => {
     isOpen,
     anchorRef: triggerRef,
     dropdownRef,
-    estimatedHeight: panelHeight,
+    estimatedHeight: selectedDate ? (isMobileView ? 580 : 520) : panelHeight,
     width: panelWidth,
     viewportPadding: 16,
     fixedLeft: isMobileView ? 16 : undefined,
-    deps: [isMobileView],
+    deps: [isMobileView, selectedDate],
   })
 
   // Parse initial value
@@ -2790,12 +2829,17 @@ export const InlineDatePicker = ({ value, onChange, placeholder }) => {
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] overflow-y-auto"
-          style={{ top: position.top, left: position.left, width: position.width || 520 }}
+          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+          style={{
+            top: position.top,
+            left: position.left,
+            width: position.width || 520,
+            maxHeight: position.maxHeight || 'calc(100vh - 32px)',
+          }}
         >
-          <div className="flex flex-col sm:flex-row">
+          <div className="flex flex-col sm:flex-row min-h-0 flex-1 overflow-hidden">
             {/* Left - Quick options */}
-            <div className="w-full sm:w-[200px] border-b sm:border-b-0 sm:border-r border-gray-100 py-2 bg-gray-50/50">
+            <div className="w-full sm:w-[200px] shrink-0 border-b sm:border-b-0 sm:border-r border-gray-100 py-2 bg-gray-50/50 overflow-y-auto max-h-36 sm:max-h-none">
               <div className="flex flex-wrap sm:flex-col gap-1 px-2 sm:px-0">
                 {quickOptions.map((option, index) => (
                   <button
@@ -2811,7 +2855,8 @@ export const InlineDatePicker = ({ value, onChange, placeholder }) => {
             </div>
 
             {/* Right - Calendar */}
-            <div className="flex-1 p-3 sm:p-4">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
               {/* Month navigation */}
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs sm:text-sm font-semibold text-gray-800">
@@ -2880,9 +2925,10 @@ export const InlineDatePicker = ({ value, onChange, placeholder }) => {
                 })}
               </div>
 
+              </div>
               {/* Time & Actions */}
               {selectedDate && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="shrink-0 px-3 sm:px-4 py-3 border-t border-gray-100 bg-white">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] sm:text-xs text-gray-500">
                       {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}

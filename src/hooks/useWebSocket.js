@@ -5,6 +5,7 @@ import { toast } from 'react-toastify'
 import { chatApi } from '../services/chatApi'
 import { adminApi } from '../services/adminApi'
 import { playNotificationSound } from '../utils/notificationSound'
+import { API_BASE_URL } from '../config/api'
 
 // Global socket instance
 let globalSocket = null
@@ -49,7 +50,7 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
 
     // Bildirişlər üçün real-time kanal (/notifications)
     if (!notificationSocket) {
-      notificationSocket = io('https://api.tanitim.az/notifications', {
+      notificationSocket = io(`${API_BASE_URL}/notifications`, {
         auth: { token },
         extraHeaders: { Authorization: `Bearer ${token}` },
         transports: ['websocket', 'polling'],
@@ -96,7 +97,7 @@ export const useWebSocket = (roomId, allRooms = [], userId = null) => {
       console.log('Initializing global socket connection with token...')
 
       // Connect to Socket.io server with /chat namespace
-      globalSocket = io('https://api.tanitim.az/chat', {
+      globalSocket = io(`${API_BASE_URL}/chat`, {
         auth: {
           token: token,
         },

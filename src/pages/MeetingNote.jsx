@@ -20,16 +20,20 @@ const toEditorHtml = (raw) => {
     .join('')
 }
 
-const ToolbarButton = ({ onAction, title, children, className = '' }) => (
+const ToolbarButton = ({ onAction, title, children, className = '', active = false }) => (
   <button
     type="button"
     title={title}
-    // onMouseDown + preventDefault — editor fokusunu və seçimi itirməmək üçün
+    aria-pressed={active}
     onMouseDown={(e) => {
       e.preventDefault()
       onAction()
     }}
-    className={`px-2 py-1 min-w-[30px] text-sm text-gray-600 rounded hover:bg-gray-100 hover:text-gray-900 transition-colors ${className}`}
+    className={`px-2 py-1 min-w-[30px] text-sm rounded transition-colors ${
+      active
+        ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+    } ${className}`}
   >
     {children}
   </button>
@@ -43,6 +47,12 @@ const MeetingNote = () => {
   const [updateTaskList] = useUpdateTaskListMutation()
 
   const [saveStatus, setSaveStatus] = useState('saved') // saved | dirty | saving
+  const [formats, setFormats] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    heading: '',
+  })
   const editorRef = useRef(null)
   const loadedListIdRef = useRef(null)
   const saveTimeoutRef = useRef(null)
@@ -55,6 +65,20 @@ const MeetingNote = () => {
       setSaveStatus('saved')
     }
   }, [taskListData])
+
+  const refreshFormats = () => {
+    const sel = window.getSelection()
+    if (!sel?.anchorNode || !editorRef.current?.contains(sel.anchorNode)) return
+    const heading = (document.queryCommandValue('formatBlock') || '')
+      .toLowerCase()
+      .replace(/[<>]/g, '')
+    setFormats({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+      heading,
+    })
+  }
 
   const saveContent = async () => {
     if (!editorRef.current) return
@@ -84,6 +108,7 @@ const MeetingNote = () => {
     editorRef.current?.focus()
     document.execCommand(command, false, value)
     markDirty()
+    refreshFormats()
   }
 
   const applyHeading = (tag) => {
@@ -132,6 +157,11 @@ const MeetingNote = () => {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', refreshFormats)
+    return () => document.removeEventListener('selectionchange', refreshFormats)
   }, [])
 
   // Səhifədən çıxanda gözləyən debounce-u təmizlə
@@ -210,14 +240,14 @@ const MeetingNote = () => {
 
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 flex-wrap px-2 py-1.5 bg-white border border-gray-200 border-b-0 rounded-t-lg">
-        <ToolbarButton title="Qalın (Ctrl+B)" onAction={() => exec('bold')} className="font-bold">B</ToolbarButton>
-        <ToolbarButton title="Kursiv (Ctrl+I)" onAction={() => exec('italic')} className="italic">I</ToolbarButton>
-        <ToolbarButton title="Altdan xətt (Ctrl+U)" onAction={() => exec('underline')} className="underline">U</ToolbarButton>
+        <ToolbarButton title="Qalın (Ctrl+B)" onAction={() => exec('bold')} active={formats.bold} className="font-bold">B</ToolbarButton>
+        <ToolbarButton title="Kursiv (Ctrl+I)" onAction={() => exec('italic')} active={formats.italic} className="italic">I</ToolbarButton>
+        <ToolbarButton title="Altdan xətt (Ctrl+U)" onAction={() => exec('underline')} active={formats.underline} className="underline">U</ToolbarButton>
         <div className="w-px h-5 bg-gray-200 mx-1" />
-        <ToolbarButton title="Başlıq 1" onAction={() => applyHeading('h1')} className="font-semibold">H1</ToolbarButton>
-        <ToolbarButton title="Başlıq 2" onAction={() => applyHeading('h2')} className="font-semibold">H2</ToolbarButton>
-        <ToolbarButton title="Başlıq 3" onAction={() => applyHeading('h3')} className="font-semibold">H3</ToolbarButton>
-        <ToolbarButton title="Başlıq 4" onAction={() => applyHeading('h4')} className="font-semibold">H4</ToolbarButton>
+        <ToolbarButton title="Başlıq 1" onAction={() => applyHeading('h1')} active={formats.heading === 'h1'} className="font-semibold">H1</ToolbarButton>
+        <ToolbarButton title="Başlıq 2" onAction={() => applyHeading('h2')} active={formats.heading === 'h2'} className="font-semibold">H2</ToolbarButton>
+        <ToolbarButton title="Başlıq 3" onAction={() => applyHeading('h3')} active={formats.heading === 'h3'} className="font-semibold">H3</ToolbarButton>
+        <ToolbarButton title="Başlıq 4" onAction={() => applyHeading('h4')} active={formats.heading === 'h4'} className="font-semibold">H4</ToolbarButton>
         <div className="w-px h-5 bg-gray-200 mx-1" />
         <ToolbarButton title="Ayırıcı xətt" onAction={() => exec('insertHorizontalRule')}>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,9 +266,16 @@ const MeetingNote = () => {
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onInput={markDirty}
+        onInput={() => {
+          markDirty()
+          refreshFormats()
+        }}
         onKeyDown={handleEditorKeyDown}
-        onClick={handleEditorClick}
+        onKeyUp={refreshFormats}
+        onClick={(e) => {
+          handleEditorClick(e)
+          refreshFormats()
+        }}
         onBlur={() => saveStatus === 'dirty' && handleManualSave()}
         data-placeholder="Görüş qeydlərini bura yazın..."
         className="note-editor flex-1 w-full p-4 text-sm text-gray-800 bg-white border border-gray-200 rounded-b-lg overflow-y-auto focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent leading-relaxed"

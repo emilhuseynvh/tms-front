@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useGetMySpacesQuery, useGetAppSettingsQuery, useSetAppSettingMutation } from '../services/adminApi'
 import { useVerifyQuery } from '../services/authApi'
 import { toast } from 'react-toastify'
+import { visibleFoldersForUser } from '../utils/folderAccess'
 
 const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wider text-indigo-600/90'
 
@@ -104,7 +105,7 @@ export default function InfluenserAzPage() {
         <div className="space-y-6 md:space-y-8">
           {mySpaces.map((space) => {
             const directLists = (space.taskLists || []).filter((l) => !l.folderId)
-            const folderList = space.folders || []
+            const folderList = visibleFoldersForUser(space.folders, currentUser)
             return (
               <div
                 key={space.id}

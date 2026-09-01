@@ -235,6 +235,25 @@ const NotificationBell = () => {
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.message}</p>
+                    {(notification.actor?.username || notification.location) && (
+                      <p className="text-[11px] text-gray-400 mt-1 line-clamp-1">
+                        {notification.actor?.username || notification.actor?.shortName || (notification.type === 'task_deadline' ? 'Sistem' : null)}
+                        {notification.actor && notification.location ? ' · ' : ''}
+                        {notification.location}
+                      </p>
+                    )}
+                    {notification.url && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleNotificationClick(notification)
+                        }}
+                        className="mt-1.5 inline-flex items-center px-2 py-0.5 text-[11px] font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50"
+                      >
+                        Keç
+                      </button>
+                    )}
                   </div>
                   {!notification.isRead && (
                     <div className="w-2 h-2 rounded-full bg-blue-600 mt-1 flex-shrink-0"></div>

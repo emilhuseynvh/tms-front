@@ -32,11 +32,11 @@ const ModalDatePicker = ({
     isOpen,
     anchorRef: triggerRef,
     dropdownRef,
-    estimatedHeight: panelHeight,
+    estimatedHeight: selectedDate && !dateOnly ? (isMobileView ? 580 : 520) : panelHeight,
     width: panelWidth,
     viewportPadding: 16,
     fixedLeft: isMobileView ? 16 : undefined,
-    deps: [isMobileView],
+    deps: [isMobileView, selectedDate, dateOnly],
   })
 
   useEffect(() => {
@@ -368,11 +368,16 @@ const ModalDatePicker = ({
       {isOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden max-h-[90vh] overflow-y-auto"
-          style={{ top: position.top, left: position.left, width: position.width || 520 }}
+          className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+          style={{
+            top: position.top,
+            left: position.left,
+            width: position.width || 520,
+            maxHeight: position.maxHeight || 'calc(100vh - 32px)',
+          }}
         >
-          <div className="flex flex-col sm:flex-row">
-            <div className="w-full sm:w-[200px] border-b sm:border-b-0 sm:border-r border-gray-100 py-2 bg-gray-50/50">
+          <div className="flex flex-col sm:flex-row min-h-0 flex-1 overflow-hidden">
+            <div className="w-full sm:w-[200px] shrink-0 border-b sm:border-b-0 sm:border-r border-gray-100 py-2 bg-gray-50/50 overflow-y-auto max-h-36 sm:max-h-none">
               <div className="flex flex-wrap sm:flex-col gap-1 px-2 sm:px-0">
                 {quickOptions.map((option, index) => (
                   <button
@@ -388,7 +393,8 @@ const ModalDatePicker = ({
               </div>
             </div>
 
-            <div className="flex-1 p-3 sm:p-4">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs sm:text-sm font-semibold text-gray-800">
                   {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
@@ -458,8 +464,9 @@ const ModalDatePicker = ({
                 })}
               </div>
 
+              </div>
               {selectedDate && !dateOnly && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="shrink-0 px-3 sm:px-4 py-3 border-t border-gray-100 bg-white">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] sm:text-xs text-gray-500">
                       {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}

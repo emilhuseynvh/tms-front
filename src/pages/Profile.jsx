@@ -29,7 +29,7 @@ const Profile = () => {
       
       setFormData({
         username: currentUser.username || '',
-        shortName: currentUser.shortName || '',
+        shortName: currentUser.shortName ?? '',
         phone: currentUser.phone || '',
         email: currentUser.email || '',
         password: '',
@@ -102,9 +102,35 @@ const Profile = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
+    const shortName = formData.shortName.trim().toUpperCase().slice(0, 3)
+
+    const payload = {
+      username: formData.username.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim(),
+      shortName: shortName === '' ? null : shortName,
+    }
+    if (formData.password.trim()) {
+      payload.password = formData.password
+    }
+    if (formData.avatarId) {
+      payload.avatarId = formData.avatarId
+    }
+
     try {
-      await updateProfile(formData).unwrap()
+      const result = await updateProfile(payload).unwrap()
       toast.success('Profil yeniləndi!')
+      if (result?.user) {
+        setFormData((prev) => ({
+          ...prev,
+          username: result.user.username || prev.username,
+          shortName: result.user.shortName || '',
+          phone: result.user.phone || prev.phone,
+          email: result.user.email || prev.email,
+          password: '',
+          avatarId: result.user.avatarId ?? result.user.avatar?.id ?? prev.avatarId,
+        }))
+      }
       refetch()
     } catch (error) {
       toast.error(error?.data?.message || 'Xəta baş verdi!')

@@ -1,28 +1,53 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useVerifyQuery } from '../services/authApi'
 import { useUpdateProfileMutation } from '../services/adminApi'
 import { toast } from 'react-toastify'
 
 /**
  * Brauzer bildirişlərini aktiv/deaktiv edən düymə.
- * Aktiv sayılması üçün həm brauzer icazəsi (Notification.permission), həm istifadəçi seçimi lazımdır.
+ * İcazə yalnız istifadəçi klikində soruşulmalıdır — səhifə yüklənəndə
+ * requestPermission Chrome-da avtomatik "denied" olur və bir daha prompt çıxmır.
  */
 const BrowserNotificationToggle = () => {
   const { data: currentUser, refetch } = useVerifyQuery()
   const [updateProfile, { isLoading }] = useUpdateProfileMutation()
-  const [, forceRender] = useState(0)
+  const [permission, setPermission] = useState(() =>
+    typeof window !== 'undefined' && 'Notification' in window
+      ? Notification.permission
+      : 'denied'
+  )
 
   const supported = typeof window !== 'undefined' && 'Notification' in window
-  const permission = supported ? Notification.permission : 'denied'
-  const isActive = supported && permission === 'granted' && !!currentUser?.browserNotificationsEnabled
+  const secure = typeof window !== 'undefined' && window.isSecureContext
+  const isActive =
+    supported && permission === 'granted' && !!currentUser?.browserNotificationsEnabled
+
+  useEffect(() => {
+    if (!supported || !navigator.permissions?.query) return
+    let status
+    navigator.permissions
+      .query({ name: 'notifications' })
+      .then((result) => {
+        status = result
+        setPermission(result.state === 'prompt' ? 'default' : result.state)
+        result.onchange = () => {
+          setPermission(result.state === 'prompt' ? 'default' : result.state)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      if (status) status.onchange = null
+    }
+  }, [supported])
 
   const saveFlag = async (enabled) => {
     try {
       await updateProfile({ browserNotificationsEnabled: enabled }).unwrap()
       localStorage.setItem('browserNotificationsEnabled', enabled ? '1' : '0')
-      refetch()
+      await refetch()
     } catch (error) {
       toast.error(error?.data?.message || 'Xəta baş verdi!')
+      throw error
     }
   }
 
@@ -32,26 +57,47 @@ const BrowserNotificationToggle = () => {
       return
     }
 
-    if (isActive) {
-      // Deaktiv et (brauzer icazəsi qalır, sadəcə istifadəçi seçimi sönür)
-      await saveFlag(false)
-      toast.success('Brauzer bildirişləri deaktiv edildi')
+    if (!secure) {
+      toast.error('Brauzer bildirişləri yalnız HTTPS və ya localhost-da işləyir')
       return
     }
 
-    // Aktiv etmək üçün brauzerdən icazə istə
+    if (isActive) {
+      try {
+        await saveFlag(false)
+        toast.success('Brauzer bildirişləri deaktiv edildi')
+      } catch {
+        /* toast already shown */
+      }
+      return
+    }
+
     let perm = Notification.permission
-    if (perm === 'default') {
-      perm = await Notification.requestPermission()
-      forceRender((n) => n + 1)
+    if (perm !== 'granted') {
+      try {
+        perm = await Notification.requestPermission()
+      } catch {
+        perm = Notification.permission
+      }
+      setPermission(perm)
     }
 
     if (perm === 'granted') {
-      await saveFlag(true)
-      toast.success('Brauzer bildirişləri aktiv edildi')
-    } else if (perm === 'denied') {
-      toast.error('Brauzer bildirişlərə icazə vermir — brauzer parametrlərindən icazə verin')
-      await saveFlag(false)
+      try {
+        await saveFlag(true)
+        toast.success('Brauzer bildirişləri aktiv edildi')
+      } catch {
+        /* toast already shown */
+      }
+    } else {
+      toast.error(
+        'Brauzer icazə vermədi. Ünvan çubuğundakı kilid/ikon üzərinə klikləyib Bildirişlər → İcazə ver seçin, sonra yenidən cəhd edin.'
+      )
+      try {
+        await saveFlag(false)
+      } catch {
+        /* toast already shown */
+      }
     }
   }
 
@@ -62,6 +108,11 @@ const BrowserNotificationToggle = () => {
         <p className="text-xs text-gray-500 mt-0.5">
           Yeni bildiriş gələndə brauzer bildirişi göstərilsin
         </p>
+        {permission === 'denied' && (
+          <p className="text-xs text-amber-600 mt-1">
+            Brauzer bu sayt üçün bildirişləri bloklayıb. Ünvan çubuğundan icazə verin, sonra düyməyə yenidən basın.
+          </p>
+        )}
       </div>
       <button
         type="button"

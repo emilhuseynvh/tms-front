@@ -30,6 +30,7 @@ import Modal from './Modal'
 import AssigneeMultiSelect from './AssigneeMultiSelect'
 import { useConfirm } from '../context/ConfirmContext'
 import { disconnectSocket } from '../hooks/useWebSocket'
+import { visibleFoldersForUser } from '../utils/folderAccess'
 
 // Path-dan list ID və folder ID-ni çıxarır
 const getListIdFromPath = (pathname) => {
@@ -75,13 +76,75 @@ const getSpaceIdFromPath = (pathname) => {
 }
 
 const sortByOrder = (items) =>
-  [...(items || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  [...(items || [])].sort((a, b) => {
+    const orderDiff = (a.order ?? 0) - (b.order ?? 0)
+    if (orderDiff !== 0) return orderDiff
+    const aTime = new Date(a.createdAt || 0).getTime()
+    const bTime = new Date(b.createdAt || 0).getTime()
+    if (aTime !== bTime) return aTime - bTime
+    return (a.id ?? 0) - (b.id ?? 0)
+  })
 
 const getDirectTaskLists = (space) =>
   sortByOrder((space?.taskLists || []).filter((l) => l.folderId == null))
 
 const getFolderTaskLists = (folder) =>
   sortByOrder(folder?.taskLists || [])
+
+const slimDragItem = (type, item) => {
+  if (!item) return item
+  if (type === 'space') {
+    return { id: item.id, name: item.name, order: item.order }
+  }
+  if (type === 'folder') {
+    return { id: item.id, name: item.name, order: item.order, spaceId: item.spaceId }
+  }
+  return {
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    order: item.order,
+    folderId: item.folderId ?? null,
+    spaceId: item.spaceId ?? null,
+  }
+}
+
+const DragGrip = () => (
+  <span
+    className="shrink-0 text-gray-300 group-hover:text-gray-400 cursor-grab active:cursor-grabbing"
+    title="Sıralamaq üçün dartın"
+    aria-hidden
+  >
+    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+      <circle cx="5" cy="4" r="1.2" />
+      <circle cx="11" cy="4" r="1.2" />
+      <circle cx="5" cy="8" r="1.2" />
+      <circle cx="11" cy="8" r="1.2" />
+      <circle cx="5" cy="12" r="1.2" />
+      <circle cx="11" cy="12" r="1.2" />
+    </svg>
+  </span>
+)
+
+const applyListOrderToSpacesCache = (spacesDraft, listIds, folderId, spaceId) => {
+  const orderMap = new Map(listIds.map((id, index) => [Number(id), index]))
+  const spaces = Array.isArray(spacesDraft) ? spacesDraft : spacesDraft?.data
+  const patch = (lists) => {
+    if (!lists) return
+    lists.forEach((list) => {
+      const next = orderMap.get(Number(list.id))
+      if (next !== undefined) list.order = next
+    })
+  }
+  for (const space of spaces || []) {
+    if (folderId) {
+      const folder = space.folders?.find((f) => Number(f.id) === Number(folderId))
+      if (folder) patch(folder.taskLists)
+    } else if (Number(space.id) === Number(spaceId)) {
+      patch(space.taskLists)
+    }
+  }
+}
 
 /** Drag-and-drop sıralama zamanı istifadəçiyə gözləmə bildirişi */
 async function runReorderWithFeedback(loadingMessage, action) {
@@ -233,11 +296,15 @@ const Sidebar = ({ isOpen, onClose }) => {
       return
     }
     e.stopPropagation()
-    const dragData = { type, item, parentInfo }
+    const dragData = { type, item: slimDragItem(type, item), parentInfo }
     draggedItemRef.current = dragData
     setDraggedItem(dragData)
     e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', JSON.stringify(dragData))
+    try {
+      e.dataTransfer.setData('text/plain', JSON.stringify(dragData))
+    } catch {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ type, item: { id: item.id }, parentInfo }))
+    }
   }
 
   // Drag end - buraxanda və ya ləğv edəndə
@@ -296,36 +363,60 @@ const Sidebar = ({ isOpen, onClose }) => {
     e.preventDefault()
     e.stopPropagation()
 
-    // TaskDetail-dən task drop edilib?
-    const taskData =
-      e.dataTransfer.getData('application/task') || e.dataTransfer.getData('text/plain')
-    if (taskData && targetType === 'list') {
+    // TaskDetail-dən task drop edilib? (sidebar list/meeting drag-i deyil)
+    const taskPayload = e.dataTransfer.getData('application/task')
+    if (taskPayload && targetType === 'list') {
       try {
-        const parsed = JSON.parse(taskData)
-        if (parsed?.type !== 'task' || !parsed?.task?.id) {
+        const parsed = JSON.parse(taskPayload)
+        if (parsed?.type === 'task' && parsed?.task?.id) {
+          const items = Array.isArray(parsed.tasks) && parsed.tasks.length > 0
+            ? parsed.tasks
+            : [parsed.task]
+          const byId = new Map(items.map((t) => [Number(t.id), t]))
+          const idSet = new Set(byId.keys())
+          const hasSelectedAncestor = (item) => {
+            let parentId = item.parentId ?? null
+            while (parentId) {
+              if (idSet.has(Number(parentId))) return true
+              parentId = byId.get(Number(parentId))?.parentId ?? null
+            }
+            return false
+          }
+          const toMove = items.filter((item) => {
+            if (Number(item.taskListId) === Number(targetItem.id)) return false
+            return !hasSelectedAncestor(item)
+          })
+
+          if (toMove.length === 0) {
+            handleDragEnd()
+            return
+          }
+
+          for (const item of toMove) {
+            const payload = {
+              id: item.id,
+              taskListId: targetItem.id,
+            }
+            if (item.parentId) {
+              payload.parentId = null
+            }
+            await updateTask(payload).unwrap()
+          }
+
+          toast.success(
+            toMove.length === 1
+              ? `"${toMove[0].title}" tapşırığı köçürüldü!`
+              : `${toMove.length} tapşırıq köçürüldü!`
+          )
+          dispatch(adminApi.util.invalidateTags(['Tasks', 'TaskLists', 'Folders', 'Spaces']))
           handleDragEnd()
           return
         }
-        const { task } = parsed
-        if (Number(task.taskListId) === Number(targetItem.id)) {
-          handleDragEnd()
-          return
-        }
-        const payload = {
-          id: task.id,
-          taskListId: targetItem.id,
-        }
-        if (task.parentId) {
-          payload.parentId = null
-        }
-        await updateTask(payload).unwrap()
-        toast.success(`"${task.title}" tapşırığı köçürüldü!`)
-        dispatch(adminApi.util.invalidateTags(['Tasks', 'TaskLists']))
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
+        handleDragEnd()
+        return
       }
-      handleDragEnd()
-      return
     }
 
     let activeDrag = draggedItemRef.current
@@ -431,17 +522,22 @@ const Sidebar = ({ isOpen, onClose }) => {
             lists = getDirectTaskLists(space)
           }
 
-          const listIds = lists.map(l => l.id)
-          const fromIndex = listIds.indexOf(sourceItem.id)
-          let toIndex = listIds.indexOf(targetItem.id)
+          const listIds = lists.map((l) => Number(l.id))
+          const fromIndex = listIds.indexOf(Number(sourceItem.id))
+          let toIndex = listIds.indexOf(Number(targetItem.id))
 
           if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
             listIds.splice(fromIndex, 1)
-            // Position-a görə düzəlt
             if (fromIndex < toIndex) toIndex--
             if (activeDropTarget?.position === 'below') toIndex++
-            listIds.splice(toIndex, 0, sourceItem.id)
-            await runReorderWithFeedback('Siyahılar sıralanır...', () =>
+            toIndex = Math.max(0, Math.min(listIds.length, toIndex))
+            listIds.splice(toIndex, 0, Number(sourceItem.id))
+            dispatch(
+              adminApi.util.updateQueryData('getMySpaces', undefined, (draft) => {
+                applyListOrderToSpacesCache(draft, listIds, sourceFolderId, sourceSpaceId)
+              })
+            )
+            await runReorderWithFeedback('Sıralama yenilənir...', () =>
               reorderTaskLists(listIds).unwrap()
             )
           }
@@ -523,12 +619,20 @@ const Sidebar = ({ isOpen, onClose }) => {
     return typeof role === 'string' ? role.toLowerCase() : 'user'
   }, [currentUser])
 
+  const accessibleSpaces = useMemo(
+    () => (spaces || []).map((space) => ({
+      ...space,
+      folders: visibleFoldersForUser(space.folders, currentUser),
+    })),
+    [spaces, currentUser]
+  )
+
   const filteredSpaces = useMemo(() => {
-    if (!searchQuery.trim()) return spaces
+    if (!searchQuery.trim()) return accessibleSpaces
 
     const query = searchQuery.toLowerCase()
 
-    return spaces.map(space => {
+    return accessibleSpaces.map(space => {
       const spaceMatches = space.name.toLowerCase().includes(query)
 
       // Folder-ləri və onların task list-lərini filtr et
@@ -1085,6 +1189,7 @@ const SpaceItem = ({
   const { confirm } = useConfirm()
   const cancelSpaceEditRef = useRef(false)
   const cancelListEditRef = useRef(false)
+  const savingListIdRef = useRef(null)
 
   // List assignee modal state (for direct space lists)
   const [assigneeListId, setAssigneeListId] = useState(null)
@@ -1147,18 +1252,24 @@ const SpaceItem = ({
     setEditListName(list.name)
   }
 
-  const handleListNameSave = async (listId) => {
+  const handleListNameSave = async (listId, rawName = editListName) => {
     if (cancelListEditRef.current) {
       cancelListEditRef.current = false
       setEditingListId(null)
       return
     }
-    if (editListName.trim() && editListName !== directLists.find(l => l.id === listId)?.name) {
+    if (savingListIdRef.current === listId) return
+    const nextName = String(rawName ?? '').trim()
+    const currentName = directLists.find(l => l.id === listId)?.name
+    if (nextName && nextName !== currentName) {
+      savingListIdRef.current = listId
       try {
-        await updateTaskList({ id: listId, name: editListName.trim() }).unwrap()
+        await updateTaskList({ id: listId, name: nextName }).unwrap()
         toast.success('Siyahı adı yeniləndi!')
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
+      } finally {
+        savingListIdRef.current = null
       }
     }
     setEditingListId(null)
@@ -1289,12 +1400,10 @@ const SpaceItem = ({
   const isCurrentDropTarget = isDropTarget('space', space.id)
 
   return (
-    <li
-      onMouseEnter={() => onHover(space.id)}
-      onMouseLeave={() => onHover(null)}
-      className={isDragging ? 'opacity-50' : ''}
-    >
+    <li className={isDragging ? 'opacity-50' : ''}>
       <div
+        onMouseEnter={() => onHover(space.id)}
+        onMouseLeave={() => onHover(null)}
         draggable={!isReordering}
         onDragStart={(e) => onDragStart(e, 'space', space, null)}
         onDragOver={(e) => canDropHere && onDragOver(e, 'space', space, null)}
@@ -1441,13 +1550,14 @@ const SpaceItem = ({
                     onDragEnd={onDragEnd}
                     onDrop={(e) => onDrop(e, 'list', list, { spaceId: space.id, folderId: null })}
                     onClick={() => editingListId !== list.id && onNavigate(getListPath(list, space.id))}
-                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 py-2 rounded text-sm transition-colors cursor-grab active:cursor-grabbing ${
                       getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === null
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                     } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <DragGrip />
                       <CreatorBadge user={list.createdBy} />
                       {list.type === 'meeting' ? (
                         <MeetingNoteIcon className="w-4 h-4 shrink-0 text-gray-400" />
@@ -1467,7 +1577,7 @@ const SpaceItem = ({
                           type="text"
                           value={editListName}
                           onChange={(e) => setEditListName(e.target.value)}
-                          onBlur={() => handleListNameSave(list.id)}
+                          onBlur={(e) => handleListNameSave(list.id, e.target.value)}
                           onKeyDown={(e) => handleListNameKeyDown(e, list.id)}
                           className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                           onClick={(e) => e.stopPropagation()}
@@ -1653,6 +1763,7 @@ const FolderItem = ({
   const { confirm } = useConfirm()
   const cancelFolderEditRef = useRef(false)
   const cancelListEditRef = useRef(false)
+  const savingListIdRef = useRef(null)
 
   // List assignee modal state (for folder lists)
   const [assigneeListId, setAssigneeListId] = useState(null)
@@ -1716,18 +1827,24 @@ const FolderItem = ({
     setEditListName(list.name)
   }
 
-  const handleListNameSave = async (listId) => {
+  const handleListNameSave = async (listId, rawName = editListName) => {
     if (cancelListEditRef.current) {
       cancelListEditRef.current = false
       setEditingListId(null)
       return
     }
-    if (editListName.trim() && editListName !== taskLists.find(l => l.id === listId)?.name) {
+    if (savingListIdRef.current === listId) return
+    const nextName = String(rawName ?? '').trim()
+    const currentName = taskLists.find(l => l.id === listId)?.name
+    if (nextName && nextName !== currentName) {
+      savingListIdRef.current = listId
       try {
-        await updateTaskList({ id: listId, name: editListName.trim() }).unwrap()
+        await updateTaskList({ id: listId, name: nextName }).unwrap()
         toast.success('Siyahı adı yeniləndi!')
       } catch (error) {
         toast.error(error?.data?.message || 'Xəta baş verdi!')
+      } finally {
+        savingListIdRef.current = null
       }
     }
     setEditingListId(null)
@@ -1791,12 +1908,10 @@ const FolderItem = ({
   const isFolderCurrentDropTarget = isDropTarget('folder', folder.id)
 
   return (
-    <li
-      onMouseEnter={() => onHover(folder.id)}
-      onMouseLeave={() => onHover(null)}
-      className={isFolderDragging ? 'opacity-50' : ''}
-    >
+    <li className={isFolderDragging ? 'opacity-50' : ''}>
       <div
+        onMouseEnter={() => onHover(folder.id)}
+        onMouseLeave={() => onHover(null)}
         draggable={!isReordering}
         onDragStart={(e) => onDragStart(e, 'folder', folder, spaceId)}
         onDragOver={(e) => canDropHere && onDragOver(e, 'folder', folder, spaceId)}
@@ -1931,13 +2046,14 @@ const FolderItem = ({
                     onDragEnd={onDragEnd}
                     onDrop={(e) => onDrop(e, 'list', list, { folderId: folder.id, spaceId: null })}
                     onClick={() => editingListId !== list.id && onNavigate(getListPath(list, spaceId, folder.id))}
-                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm transition-colors cursor-grab active:cursor-grabbing ${
                       getListIdFromPath(location.pathname) === list.id && getFolderIdFromPath(location.pathname) === folder.id
                         ? 'bg-blue-100 text-blue-800 font-medium'
                         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                     } ${isListCurrentDropTarget && !isListDragging ? getDropIndicatorClass('list', list.id) : ''}`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <DragGrip />
                       <CreatorBadge user={list.createdBy} />
                       {list.type === 'meeting' ? (
                         <MeetingNoteIcon className="w-4 h-4 shrink-0 text-gray-400" />
@@ -1957,7 +2073,7 @@ const FolderItem = ({
                           type="text"
                           value={editListName}
                           onChange={(e) => setEditListName(e.target.value)}
-                          onBlur={() => handleListNameSave(list.id)}
+                          onBlur={(e) => handleListNameSave(list.id, e.target.value)}
                           onKeyDown={(e) => handleListNameKeyDown(e, list.id)}
                           className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                           onClick={(e) => e.stopPropagation()}

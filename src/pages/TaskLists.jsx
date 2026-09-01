@@ -27,6 +27,7 @@ import { toast } from 'react-toastify'
 import { parseServerTimestamp, filterEndDateParam, filterStartDateParam } from '../utils/bakuTime'
 import { assigneeBadgeClassName, assigneeBadgeTitle } from '../utils/assigneeBadge'
 import InlineTaskTable from '../components/InlineTaskTable'
+import { visibleFoldersForUser } from '../utils/folderAccess'
 
 const BAKU_TZ = 'Asia/Baku'
 
@@ -193,8 +194,15 @@ const TaskLists = () => {
     })
   }
 
-  const folders = data?.folders || []
-  const directLists = data?.directLists || data?.taskLists || []
+  const folders = visibleFoldersForUser(data?.folders || [], currentUser)
+  const directLists = [...(data?.directLists || data?.taskLists || [])].sort((a, b) => {
+    const orderDiff = (a.order ?? 0) - (b.order ?? 0)
+    if (orderDiff !== 0) return orderDiff
+    const aTime = new Date(a.createdAt || 0).getTime()
+    const bTime = new Date(b.createdAt || 0).getTime()
+    if (aTime !== bTime) return aTime - bTime
+    return (a.id ?? 0) - (b.id ?? 0)
+  })
   const allTasks = data?.allTasks || []
 
   const filteredData = useMemo(() => {

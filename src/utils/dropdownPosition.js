@@ -9,25 +9,31 @@ export function computeDropdownPosition(anchorRect, dropdownHeight, options = {}
   const vh = window.innerHeight
   const vw = window.innerWidth
 
-  const spaceBelow = vh - anchorRect.bottom - padding
-  const spaceAbove = anchorRect.top - padding
+  const spaceBelow = vh - anchorRect.bottom - padding - gap
+  const spaceAbove = anchorRect.top - padding - gap
 
   let placement = 'below'
-  let top = anchorRect.bottom + gap
-
   const fitsBelow = dropdownHeight <= spaceBelow
   const fitsAbove = dropdownHeight <= spaceAbove
 
   if (!fitsBelow && (fitsAbove || spaceAbove > spaceBelow)) {
     placement = 'above'
-    top = anchorRect.top - gap - dropdownHeight
   }
+
+  const available = placement === 'below' ? spaceBelow : spaceAbove
+  const maxHeight = Math.max(160, Math.min(vh - padding * 2, available))
+  const usedHeight = Math.min(dropdownHeight, maxHeight)
+
+  let top =
+    placement === 'below'
+      ? anchorRect.bottom + gap
+      : anchorRect.top - gap - usedHeight
 
   if (top < padding) {
     top = padding
   }
-  if (top + dropdownHeight > vh - padding) {
-    top = Math.max(padding, vh - padding - dropdownHeight)
+  if (top + usedHeight > vh - padding) {
+    top = Math.max(padding, vh - padding - usedHeight)
   }
 
   let left = options.fixedLeft ?? options.left
@@ -46,5 +52,5 @@ export function computeDropdownPosition(anchorRect, dropdownHeight, options = {}
     left = padding
   }
 
-  return { top, left, width, placement }
+  return { top, left, width, placement, maxHeight }
 }

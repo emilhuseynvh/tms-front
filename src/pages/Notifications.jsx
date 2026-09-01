@@ -68,6 +68,33 @@ const formatNotificationDate = (raw) => {
   return formatFullDateTimeBaku(d)
 }
 
+const getActorLabel = (notification) => {
+  const name = notification.actor?.username || notification.actor?.shortName
+  if (name) return name
+  if (notification.type === 'task_deadline') return 'Sistem'
+  return null
+}
+
+const getNotificationPath = (notification) => {
+  let path = notification.url || null
+  if (path) return path
+
+  const taskList = notification.task?.taskList
+  if (taskList) {
+    const segment = taskList.type === 'meeting' ? 'note' : 'list'
+    if (taskList.folderId && taskList.folder?.spaceId) {
+      return `/tasks/space/${taskList.folder.spaceId}/folder/${taskList.folderId}/${segment}/${taskList.id}`
+    }
+    if (taskList.spaceId) {
+      return `/tasks/space/${taskList.spaceId}/${segment}/${taskList.id}`
+    }
+  }
+  if (notification.spaceId) {
+    return `/tasks/space/${notification.spaceId}`
+  }
+  return null
+}
+
 const Notifications = () => {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
@@ -108,26 +135,11 @@ const Notifications = () => {
   const total = data?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / limit))
 
-  const handleNotificationClick = async (notification) => {
+  const goToNotification = async (notification) => {
     if (!notification.isRead) {
       await markAsRead(notification.id)
     }
-
-    let path = notification.url || null
-    if (!path) {
-      const taskList = notification.task?.taskList
-      if (taskList) {
-        const segment = taskList.type === 'meeting' ? 'note' : 'list'
-        if (taskList.folderId && taskList.folder?.spaceId) {
-          path = `/tasks/space/${taskList.folder.spaceId}/folder/${taskList.folderId}/${segment}/${taskList.id}`
-        } else if (taskList.spaceId) {
-          path = `/tasks/space/${taskList.spaceId}/${segment}/${taskList.id}`
-        }
-      } else if (notification.spaceId) {
-        path = `/tasks/space/${notification.spaceId}`
-      }
-    }
-
+    const path = getNotificationPath(notification)
     if (path) navigate(path)
   }
 
@@ -244,8 +256,7 @@ const Notifications = () => {
           {notifications.map((notification) => (
             <div
               key={notification.id}
-              onClick={() => handleNotificationClick(notification)}
-              className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer group ${
+              className={`p-4 hover:bg-gray-50 transition-colors group ${
                 !notification.isRead ? 'bg-blue-50/50' : ''
               }`}
             >
@@ -261,7 +272,30 @@ const Notifications = () => {
                     )}
                   </div>
                   <p className="text-sm text-gray-600 mt-0.5 wrap-break-word">{notification.message}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatNotificationDate(notification.createdAt)}</p>
+                  <div className="mt-2 space-y-1 text-xs text-gray-500">
+                    {getActorLabel(notification) && (
+                      <p>
+                        <span className="text-gray-400">Kimdən:</span>{' '}
+                        <span className="font-medium text-gray-700">{getActorLabel(notification)}</span>
+                      </p>
+                    )}
+                    {notification.location && (
+                      <p className="wrap-break-word">
+                        <span className="text-gray-400">Yer:</span>{' '}
+                        <span className="text-gray-700">{notification.location}</span>
+                      </p>
+                    )}
+                    <p className="text-gray-400">{formatNotificationDate(notification.createdAt)}</p>
+                  </div>
+                  {getNotificationPath(notification) && (
+                    <button
+                      type="button"
+                      onClick={() => goToNotification(notification)}
+                      className="mt-2 inline-flex items-center px-2.5 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
+                    >
+                      Keç
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={(e) => handleDelete(e, notification.id)}

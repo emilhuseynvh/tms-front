@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useGetMySpacesQuery, useGetSpaceFullDetailsQuery } from '../services/adminApi'
+import { useVerifyQuery } from '../services/authApi'
 import InlineTaskTable from '../components/InlineTaskTable'
+import { visibleFoldersForUser } from '../utils/folderAccess'
 
 /** Bir siyahının bloku: başlıq + inline task cədvəli */
 const ListBlock = ({ list, folderName, spaceId, folderId, navigate }) => {
@@ -56,14 +58,15 @@ const ListBlock = ({ list, folderName, spaceId, folderId, navigate }) => {
 }
 
 /** Bir workspace-in (space) icmalı — açılanda tam detallar yüklənir */
-const SpaceOverview = ({ space, navigate }) => {
+const SpaceOverview = ({ space, navigate, currentUser }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const { data, isLoading } = useGetSpaceFullDetailsQuery(
     { id: space.id },
     { skip: !isExpanded }
   )
 
-  const folders = data?.folders || []
+  const spaceFolders = visibleFoldersForUser(space.folders, currentUser)
+  const folders = visibleFoldersForUser(data?.folders || [], currentUser)
   const directLists = data?.directLists || []
   const taskCount = data?.allTasks?.length
 
@@ -90,7 +93,7 @@ const SpaceOverview = ({ space, navigate }) => {
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-gray-900 truncate">{space.name}</h2>
           <p className="text-xs text-gray-500">
-            {(space.folders?.length || 0)} qovluq · {(space.taskLists?.filter((l) => !l.folderId).length || 0)} birbaşa siyahı
+            {(spaceFolders.length || 0)} qovluq · {(space.taskLists?.filter((l) => !l.folderId).length || 0)} birbaşa siyahı
             {isExpanded && taskCount !== undefined && ` · ${taskCount} tapşırıq`}
           </p>
         </div>
@@ -145,6 +148,7 @@ const SpaceOverview = ({ space, navigate }) => {
 const Home = () => {
   const navigate = useNavigate()
   const { data: mySpaces = [], isLoading } = useGetMySpacesQuery()
+  const { data: currentUser } = useVerifyQuery()
 
   return (
     <div>
@@ -168,7 +172,7 @@ const Home = () => {
       ) : (
         <div className="space-y-4">
           {mySpaces.map((space) => (
-            <SpaceOverview key={space.id} space={space} navigate={navigate} />
+            <SpaceOverview key={space.id} space={space} navigate={navigate} currentUser={currentUser} />
           ))}
         </div>
       )}

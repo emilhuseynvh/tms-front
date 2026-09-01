@@ -329,7 +329,7 @@ const UserFormModal = ({
       if (user) {
         setFormData({
           username: user.username || '',
-          shortName: user.shortName || '',
+          shortName: user.shortName ?? '',
           phone: user.phone || '',
           email: user.email || '',
           password: '',
@@ -361,13 +361,27 @@ const UserFormModal = ({
     e.preventDefault()
 
     try {
+      const shortName = formData.shortName.trim().toUpperCase().slice(0, 3)
+      const payload = {
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        role: formData.role,
+        shortName: shortName === '' ? null : shortName,
+      }
+      if (formData.password.trim()) {
+        payload.password = formData.password
+      }
+
       if (user) {
-        // Update
-        await updateUser({ id: user.id, ...formData }).unwrap()
+        await updateUser({ id: user.id, ...payload }).unwrap()
         toast.success('İstifadəçi yeniləndi!')
       } else {
-        // Create
-        await createUser(formData).unwrap()
+        if (!payload.password) {
+          toast.error('Şifrə tələb olunur!')
+          return
+        }
+        await createUser(payload).unwrap()
         toast.success('İstifadəçi yaradıldı!')
       }
       onClose()
